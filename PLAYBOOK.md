@@ -37,8 +37,9 @@ How to build on the shared platform layer in this monorepo.
 
 4. Extend `tsconfig.base.json`'s `include` (or add an app `tsconfig.json` that
    extends it) so `pnpm typecheck` covers the new app, and add a
-   `vitest.config.ts` in the app so it is picked up by the root
-   `test.projects: ["packages/*", "apps/*"]` glob when you add `apps/*` there.
+   `vitest.config.ts` in the app — the root
+   `test.projects: ["packages/*", "apps/*/vitest.config.ts"]` glob picks it up
+   automatically, so the app's tests count towards the quality gate.
 5. Non-negotiable rules: **every state-changing action is audited** through
    `@acme/audit-log`, and **every route is role-checked** through
    `@acme/auth-guard`. No app-local audit tables and no app-local header
