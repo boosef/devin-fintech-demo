@@ -1,9 +1,11 @@
 # devin-fintech-demo — internal tools
 
-Shared audit logging and role checks for internal fintech tools, with a working
-[refunds review dashboard](apps/refunds-dashboard/README.md) built on those
-packages. A KYC checker and a feature-flag enabler are **planned**; neither is
-implemented here yet.
+Shared audit logging and role checks for internal fintech tools. Platform-owned
+core apps in `apps/` expose published APIs for employee-built tools in
+`team-apps/`. The [refunds review dashboard](apps/refunds-dashboard/README.md)
+is the first core app and [its versioned refunds API](apps/refunds-dashboard/README.md#team-app-api-apiv1refunds)
+is the first published contract. A KYC checker and a feature-flag enabler are
+**planned**; neither is implemented here yet.
 
 This is a proof of concept with synthetic data, not a production deployment.
 See [PLAYBOOK.md](PLAYBOOK.md#5-whats-explicitly-out-of-scope-for-this-poc) and
@@ -15,9 +17,27 @@ the [dashboard's production gaps](apps/refunds-dashboard/README.md#out-of-scope)
 packages/audit-log       @acme/audit-log          append-only audit records
 packages/auth-guard      @acme/auth-guard         mock role-based access checks
 apps/refunds-dashboard   @acme/refunds-dashboard  refunds review UI and API
+team-apps/*              configured workspace for team-owned tools
 scripts/                 CI helper scripts
 .github/                 quality-gate workflow, CODEOWNERS, test baseline
 ```
+
+## Build a team tool or add a core use case
+
+Team tools call a core app's **versioned API** from their server, keep their
+own data and audit their own local changes. They do not import core app code
+or query its database. For refunds, the published contract is
+`GET /api/v1/refunds` and `POST /api/v1/refunds/:id/approve|deny`; the
+dashboard's older unversioned routes are for its own UI. See the
+[team-app workflow](PLAYBOOK.md#6-building-or-migrating-a-team-app) for setup,
+identity forwarding, tests and migration checks, and the
+[refunds API reference](apps/refunds-dashboard/README.md#team-app-api-apiv1refunds)
+for request/response details.
+
+If a team needs data or an action the published contract does not provide,
+request a platform-owned API change first. The [core-app workflow](PLAYBOOK.md#1-adding-a-platform-owned-core-app)
+covers new apps and API design; [AGENTS.md](AGENTS.md) defines the ownership
+boundary for both people and agents.
 
 ## Refunds dashboard at a glance
 
@@ -55,7 +75,8 @@ database](apps/refunds-dashboard/README.md#setup), then run
 `pnpm test:ci` (coverage + `test-results.json`),
 `pnpm --filter @acme/audit-log test` (single package). The test suite includes
 the dashboard and CI helper tests, but **coverage measures only `packages/*`**,
-not the app or scripts.
+not the app or scripts. New team-app tests and typechecking need explicit root
+configuration; see the [playbook](PLAYBOOK.md#6-building-or-migrating-a-team-app).
 
 ## Decisions
 

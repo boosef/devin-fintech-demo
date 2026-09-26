@@ -90,18 +90,31 @@ request stays pending).
 
 **This versioned JSON API is the ONLY interface team-apps (employee-built
 tools under `team-apps/`) may depend on.** Team apps may not import from
-`apps/**` or open this database — `pnpm lint` enforces the boundary. The older
-unversioned routes above exist for the dashboard itself and are not a
-supported contract.
+`apps/**` or open this database. `pnpm lint` rejects imports from `apps/**`;
+database access must also be checked in review. The older unversioned routes
+above exist for the dashboard itself and are not a supported contract. See
+the [team-app workflow](../../PLAYBOOK.md#6-building-or-migrating-a-team-app)
+for a repeatable setup and quality-gate checklist.
 
 Identity for API callers comes from the forwarded `x-mock-role` /
 `x-mock-user-id` headers, read by `getMockUser` from `@acme/auth-guard`;
 `hasRole` then requires `reviewer` or `admin` on every route.
 
 **Production gap:** identity is forwarded mock headers today — any caller can
-claim any role. Production would authenticate the caller and run a token
-exchange (on-behalf-of) so the API receives a verifiable identity, not
-headers.
+claim any role. These headers work only with `MOCK_AUTH_ENABLED=true` and are
+for synthetic development data. Production would authenticate the caller and
+run a token exchange (on-behalf-of) so the API receives a verifiable identity,
+not headers.
+
+To simulate a server-side client locally, list the mock reviewer's own queue:
+
+```bash
+curl -i -H 'x-mock-role: reviewer' -H 'x-mock-user-id: demo-reviewer' \
+  'http://localhost:3000/api/v1/refunds?assignedTo=me'
+```
+
+The dashboard UI's `mock_role` / `mock_user_id` cookies apply to its own
+unversioned routes; they do not authenticate a request to this versioned API.
 
 ### `GET /api/v1/refunds`
 
@@ -111,7 +124,7 @@ Query params:
 | --- | --- | --- |
 | `status` | `pending` \| `approved` \| `denied` \| `all` | defaults to `pending`; anything else is `400` |
 | `from` / `to` | `YYYY-MM-DD` | inclusive UTC day bounds on `requestedAt`; malformed dates are `400` |
-| `assignedTo` | `me` or a reviewer id | `me` resolves to the authenticated user's id **server-side** — a client-supplied user id is never trusted as `me` |
+| `assignedTo` | `me` or a reviewer id | `me` resolves to the caller's mock id **server-side**; an explicit reviewer id is a filter, not a per-assignee permission check |
 
 Response `200`: `{ "items": RefundItem[] }`, oldest request first, where each
 item is the decrypted record plus two server-computed fields:
@@ -147,9 +160,19 @@ leaves `pending` exactly once and every decision writes exactly one audit
 record containing only `status`, `reviewed_by`, `reviewed_at` and
 `decision_reason` — never the customer id or amount.
 
+For a local pending `REFUND_ID` returned by the list call, approve it with:
+
+```bash
+curl -i -X POST "http://localhost:3000/api/v1/refunds/$REFUND_ID/approve" \
+  -H 'x-mock-role: reviewer' -H 'x-mock-user-id: demo-reviewer' \
+  -H 'Content-Type: application/json' --data '{"note":"Reviewed"}'
+```
+
 Error responses everywhere are `{ "error": string, "message": string }`:
 `403` no reviewer/admin role, `400` validation (bad status/date, empty deny
-reason), `404` unknown id, `409` already reviewed.
+reason), `404` unknown id, `409` already reviewed, `415` non-JSON content
+type, `500` unexpected error or audit write failure (the request stays pending
+if the audit write fails).
 
 ## Rules the service enforces
 
