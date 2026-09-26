@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "public",
+    "rootDir": "src",
+    "declaration": false,
+    "sourceMap": false
+  },
+  "include": ["src/render.ts"]
+}

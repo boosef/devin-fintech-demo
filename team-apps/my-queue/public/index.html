@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Refund Queue</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<h1>My Refund Queue</h1>
+<div class="sub">
+  Viewing as
+  <select id="persona">
+    <option value="demo-reviewer">demo-reviewer</option>
+    <option value="demo-admin">demo-admin</option>
+    <option value="none">no role (unauthorized)</option>
+  </select>
+  · <span id="lastRefresh"></span>
+</div>
+
+<div class="banner">Notes are stored in plaintext for this POC — don't put customer data in notes.</div>
+<div id="error" class="error" hidden></div>
+
+<div class="cards">
+  <div class="card"><div class="num" id="countOpen">0</div><div class="lbl">My open cases</div></div>
+  <div class="card"><div class="num" id="countLate">0</div><div class="lbl">Over 3 days old</div></div>
+  <div class="card"><div class="num" id="totalAmt">$0</div><div class="lbl">Total $ waiting</div></div>
+</div>
+
+<table>
+  <thead>
+    <tr><th>Case</th><th>Customer</th><th>Amount</th><th>Reason</th><th>Requested</th><th>Age</th><th>My notes</th><th></th></tr>
+  </thead>
+  <tbody id="rows"></tbody>
+</table>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>

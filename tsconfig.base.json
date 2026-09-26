@@ -15,5 +15,12 @@
     "verbatimModuleSyntax": true,
     "isolatedModules": true
   },
-  "include": ["packages/*/src/**/*.ts", "packages/*/tests/**/*.ts", "scripts/**/*.ts"]
+  "include": [
+    "packages/*/src/**/*.ts",
+    "packages/*/tests/**/*.ts",
+    "team-apps/*/src/**/*.ts",
+    "team-apps/*/tests/**/*.ts",
+    "team-apps/*/vitest.config.ts",
+    "scripts/**/*.ts"
+  ]
 }
