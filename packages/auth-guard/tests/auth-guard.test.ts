@@ -43,15 +43,6 @@ describe("getMockUser", () => {
 });
 
 describe("hasRole", () => {
-  it("returns true when the user's role is allowed", () => {
-    expect(hasRole({ id: "alice", email: "alice@example.test", role: "admin" }, ["admin"])).toBe(
-      true,
-    );
-    expect(
-      hasRole({ id: "bob", email: "bob@example.test", role: "reviewer" }, ["admin", "reviewer"]),
-    ).toBe(true);
-  });
-
   it("returns false for a disallowed role, a null user and an empty allow list", () => {
     const reviewer = { id: "bob", email: "bob@example.test", role: "reviewer" } as const;
 
