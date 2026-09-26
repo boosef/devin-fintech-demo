@@ -21,7 +21,7 @@ cp .env.example .env.local
 # put a real key in .env.local:
 node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 
-pnpm db:seed    # wipes data/refunds.db and inserts 18 synthetic requests
+pnpm db:seed    # wipes data/refunds.db and inserts 18 synthetic requests (stop `pnpm dev` first)
 pnpm dev        # http://localhost:3000
 ```
 

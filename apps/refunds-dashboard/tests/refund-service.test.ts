@@ -186,6 +186,9 @@ describe("listRefunds filters", () => {
     expect(
       ids(await ctx.service.listRefunds({ user: reviewer, filter: { status: "all", from: "2026-09-10", to: "2026-09-20" } })),
     ).toEqual([mid.id, late.id, approved.id].sort());
+    expect(
+      ids(await ctx.service.listRefunds({ user: reviewer, filter: { status: "all", from: "2026-09-01", to: "9999-12-31" } })),
+    ).toHaveLength(5);
 
     const [first] = await ctx.service.listRefunds({ user: reviewer, filter: { from: "2026-09-01", to: "2026-09-01" } });
     expect(first).toMatchObject({ id: early.id, customerId: "cust_test_0001", amountCents: 4321 });

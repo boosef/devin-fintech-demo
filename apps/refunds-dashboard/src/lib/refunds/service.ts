@@ -2,7 +2,7 @@ import "server-only";
 
 import { createAuditLog, type AuditLog, type AuditRecord } from "@acme/audit-log";
 import { hasRole, type MockUser, type Role } from "@acme/auth-guard";
-import { and, desc, eq, gte, lt, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, lte, type SQL } from "drizzle-orm";
 
 import { defaultDatabasePath, openDatabase, type RefundsDb } from "@/db/client";
 import { refundRequests, REFUND_STATUSES, type RefundRequestRow, type RefundStatus } from "@/db/schema";
@@ -159,7 +159,7 @@ export function createRefundService({ db, auditLog, encryptionKey, now = () => n
       const conditions: SQL[] = [];
       if (status !== "all") conditions.push(eq(refundRequests.status, status));
       if (filter.from) conditions.push(gte(refundRequests.requestedAt, startOfUtcDay(filter.from, "from")));
-      if (filter.to) conditions.push(lt(refundRequests.requestedAt, startOfNextUtcDay(filter.to, "to")));
+      if (filter.to) conditions.push(lte(refundRequests.requestedAt, endOfUtcDay(filter.to, "to")));
 
       const rows = db
         .select()
@@ -228,10 +228,9 @@ function startOfUtcDay(value: string, field: string): string {
   return parseDateOnly(value, field).toISOString();
 }
 
-function startOfNextUtcDay(value: string, field: string): string {
-  const date = parseDateOnly(value, field);
-  date.setUTCDate(date.getUTCDate() + 1);
-  return date.toISOString();
+function endOfUtcDay(value: string, field: string): string {
+  parseDateOnly(value, field);
+  return `${value}T23:59:59.999Z`;
 }
 
 // Process-wide default instance for the Next.js app, cached on globalThis so
@@ -240,11 +239,12 @@ const globalForRefunds = globalThis as typeof globalThis & { __refundService?: R
 
 export function getRefundService(): RefundService {
   if (globalForRefunds.__refundService === undefined) {
+    const encryptionKey = loadEncryptionKey();
     const db = openDatabase(defaultDatabasePath());
     globalForRefunds.__refundService = createRefundService({
       db,
       auditLog: createAuditLog(new SqliteAuditLogStore(db)),
-      encryptionKey: loadEncryptionKey(),
+      encryptionKey,
     });
   }
   return globalForRefunds.__refundService;
