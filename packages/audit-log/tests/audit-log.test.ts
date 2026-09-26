@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import * as auditLogModule from "../src/index";
 import { InMemoryAuditLogStore, createAuditLog } from "../src/index";
-import type { AuditEvent } from "../src/index";
+import type { AuditEvent, AuditLogStore } from "../src/index";
 
 const UUID_V4 =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -92,6 +92,36 @@ describe("public API surface", () => {
       "recordAuditEvent",
     ]);
     expect(Object.keys(freshLog()).sort()).toEqual(["queryAuditLog", "recordAuditEvent"]);
+  });
+});
+
+describe("store failure modes", () => {
+  it("records an event whose payload contains a cycle", async () => {
+    const { recordAuditEvent, queryAuditLog } = freshLog();
+    const after: Record<string, unknown> = { status: "approved" };
+    after.self = after;
+
+    const record = await recordAuditEvent(refundApproval({ entityId: "rr_cycle", after }));
+
+    expect(Object.isFrozen(record.after)).toBe(true);
+    const [stored] = await queryAuditLog({ entityId: "rr_cycle" });
+    const storedAfter = stored?.after as { status: string; self: unknown };
+    expect(storedAfter.status).toBe("approved");
+    expect(storedAfter.self).toBe(storedAfter);
+  });
+
+  it("does not fail a committed write when the store's read-back fails", async () => {
+    const store = new InMemoryAuditLogStore();
+    const failingReads: AuditLogStore = {
+      append: (record) => store.append(record),
+      query: () => Promise.reject(new Error("read unavailable")),
+    };
+
+    const record = await createAuditLog(failingReads).recordAuditEvent(refundApproval());
+
+    expect(record.id).toMatch(UUID_V4);
+    const [stored] = await store.query({ entityId: "rr_1" });
+    expect(stored?.id).toBe(record.id);
   });
 });
 

@@ -5,10 +5,12 @@ export interface AuditLogStore {
   query(filter: AuditQuery): Promise<AuditRecord[]>;
 }
 
-function deepFreeze<T>(value: T): T {
+export function deepFreeze<T>(value: T, seen = new WeakSet<object>()): T {
   if (value === null || typeof value !== "object") return value;
+  if (seen.has(value)) return value;
+  seen.add(value);
   for (const key of Reflect.ownKeys(value)) {
-    deepFreeze((value as Record<string | symbol, unknown>)[key]);
+    deepFreeze((value as Record<string | symbol, unknown>)[key], seen);
   }
   return Object.freeze(value);
 }

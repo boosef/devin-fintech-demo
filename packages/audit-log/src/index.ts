@@ -1,4 +1,4 @@
-import { InMemoryAuditLogStore, type AuditLogStore } from "./store";
+import { InMemoryAuditLogStore, deepFreeze, type AuditLogStore } from "./store";
 import type { AuditEvent, AuditQuery, AuditRecord } from "./types";
 
 export type { ActorType, AuditEvent, AuditQuery, AuditRecord } from "./types";
@@ -19,10 +19,7 @@ export function createAuditLog(store: AuditLogStore): AuditLog {
         timestamp: new Date().toISOString(),
       };
       await store.append(record);
-      const [stored] = (await store.query({ entityId: record.entityId })).filter(
-        (candidate) => candidate.id === record.id,
-      );
-      return stored ?? record;
+      return deepFreeze(structuredClone(record));
     },
     async queryAuditLog(filter: AuditQuery): Promise<AuditRecord[]> {
       return store.query(filter);
