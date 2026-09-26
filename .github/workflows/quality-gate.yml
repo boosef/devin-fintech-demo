@@ -40,6 +40,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Build refunds dashboard
+        run: pnpm --filter @acme/refunds-dashboard build
+
       - name: Test
         run: pnpm test:ci
 
