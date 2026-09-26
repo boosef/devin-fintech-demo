@@ -8,9 +8,14 @@ const HTTP_STATUS: Record<RefundErrorCode, number> = {
   audit_failed: 500,
 };
 
+// Branded with a registered symbol rather than relying on `instanceof`: the
+// bundler can load this module more than once (e.g. once per server layer).
+const BRAND = Symbol.for("@acme/refunds-dashboard/RefundServiceError");
+
 export class RefundServiceError extends Error {
   override name = "RefundServiceError";
   readonly code: RefundErrorCode;
+  readonly [BRAND] = true;
 
   constructor(code: RefundErrorCode, message: string, options?: ErrorOptions) {
     super(message, options);
@@ -23,5 +28,5 @@ export class RefundServiceError extends Error {
 }
 
 export function isRefundServiceError(error: unknown): error is RefundServiceError {
-  return error instanceof RefundServiceError;
+  return typeof error === "object" && error !== null && BRAND in error;
 }
