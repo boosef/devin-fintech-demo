@@ -1,0 +1,10 @@
+# Paths that require review from the security reviewers team.
+# NOTE: @acme-org/security-reviewers is a placeholder; replace it with a real
+# GitHub team that has write access to this repository.
+
+/packages/auth-guard/ @acme-org/security-reviewers
+/packages/audit-log/ @acme-org/security-reviewers
+/.github/ @acme-org/security-reviewers
+/scripts/check-test-baseline.mjs @acme-org/security-reviewers
+**/auth/** @acme-org/security-reviewers
+**/crypto/** @acme-org/security-reviewers
