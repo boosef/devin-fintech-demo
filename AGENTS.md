@@ -27,9 +27,11 @@ step-by-step procedures.
 
 - Never edit files under `.github/` or `packages/` unless the task explicitly
   asks for it. Those paths are code-owned and require security review.
-- New apps go in `apps/<name>` and follow PLAYBOOK.md section 1.
-- Every state-changing action in an app must be audited, and every route must be
-  role-checked.
+- New platform-owned core apps go in `apps/<name>` and follow PLAYBOOK.md
+  section 1. Team tools go in `team-apps/<name>` and follow section 6.
+- All routes enforce roles through `@acme/auth-guard`. Core apps audit their
+  own state changes; team apps audit their own state changes, while a core
+  API audits decisions it owns.
 
 ## Team apps
 
@@ -38,8 +40,12 @@ step-by-step procedures.
 - Team apps live in `team-apps/<name>/`, own only their own data, and reach
   core data only through a core app's published API (for refunds:
   `/api/v1/refunds`, documented in `apps/refunds-dashboard/README.md`).
-- A team app may not import from `apps/**` and may not open or query a core
-  app's database — `pnpm lint` enforces this boundary with an error.
+- A team app may not import from `apps/**` or open or query a core app's
+  database. `pnpm lint` rejects forbidden imports; database access must also
+  be checked during review because lint does not inspect runtime DB paths.
+- API gaps require a separate platform-owned change under `apps/`: add a
+  versioned contract, service checks, tests and documentation before a team
+  app relies on it. Never extend a team tool by reaching into core internals.
 
 ## Before opening a PR
 

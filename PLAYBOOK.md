@@ -2,7 +2,7 @@
 
 How to build on the shared platform layer in this monorepo.
 
-## 1. Adding a new internal app
+## 1. Adding a platform-owned core app
 
 1. Create the app under `apps/<name>` (e.g. `apps/refunds-dashboard`).
    `pnpm-workspace.yaml` already includes `apps/*`, so pnpm discovers it as a
@@ -49,6 +49,27 @@ How to build on the shared platform layer in this monorepo.
    parsing.
 6. Run `pnpm install`, then `pnpm lint && pnpm typecheck && pnpm test` before
    opening a PR, and raise `minPassedTests` (section 4) for the tests you added.
+
+### Publishing a new core API
+
+A new use case belongs in a platform-owned app under `apps/`. Keep route
+handlers thin: delegate to an API adapter (with injectable service and clock
+for tests), which maps requests and JSON responses onto existing service
+methods. Enforce roles at the API boundary *and* in the core service, where
+business rules, database access and auditing belong. Publish a versioned JSON
+contract under `/api/v1/<resource>` rather than exposing internal modules,
+database tables or UI-only routes. Compute derived fields and caller-relative
+filters on the core server. Document the query/body shapes, response and error
+JSON, role requirements and status codes in the core app's README; keep v1
+stable for existing callers, publishing a new version for incompatible changes.
+Add tests for the real handler path and service: filtering, identity resolution,
+role denial, repeated decisions and the audit record.
+`apps/refunds-dashboard/src/lib/refunds/api-v1.ts` and
+`apps/refunds-dashboard/tests/refunds-api.test.ts` show the current pattern.
+
+If a team requests a field or action absent from a published API, the platform
+team reviews that change in the core app first. Only then should a team app
+consume the new contract; keep ownership and tests on each side of the API.
 
 ## 2. Using `packages/audit-log`
 
@@ -207,32 +228,64 @@ The guard's own logic is unit-tested in `scripts/tests/`, which runs as the
 
 ## 6. Building or migrating a team app
 
-Team apps are employee-built tools under `team-apps/<name>/`. They are
-separate from platform work: `apps/` and `packages/` are platform-owned and a
-team-app PR never changes them.
+Team tools live under `team-apps/<name>/`; `pnpm-workspace.yaml` already
+includes `team-apps/*`. Core apps in `apps/` own their APIs and data, and
+`packages/` owns shared platform behavior. Follow this sequence for a new
+team request or a legacy-tool migration:
 
-1. **Read first**: `AGENTS.md`, this playbook, `.github/CODEOWNERS`, and the
-   README of the core app you depend on (e.g. `apps/refunds-dashboard/README.md`)
-   so you know its published API, its rules and who reviews your PR.
-2. **Depend only on a published core API.** `GET /api/v1/refunds` and
-   `POST /api/v1/refunds/:id/{approve,deny}` are the refunds contract. If the
-   API cannot express what you need, stop and file a platform request — do not
-   reach past the API.
-3. **Own your own data.** A team app keeps its own tables/database; a core
-   app's database is off-limits, including read-only queries.
-4. **Audit every state change** through your own
-   `createAuditLog(store)` instance — never through a core app's audit table.
-5. **Authorize server-side**: forward the caller's identity to the core API
-   (`x-mock-role` / `x-mock-user-id` headers today; a token exchange in
-   production) and let the core app's role check decide. Never trust a
-   client-supplied user id.
-6. **Boundaries are mechanical**: no imports from `apps/**` (ESLint
-   `no-restricted-imports`/`no-restricted-modules` fail `pnpm lint` for
-   `team-apps/**` files) and no core DB access.
-7. When migrating a legacy tool, keep an **inventory + defects table** in the
-   app's `MIGRATION.md` (every legacy screen/flow mapped to its replacement,
-   and every known legacy bug listed), and write **one regression test per
-   legacy bug** so a fixed defect can never come back silently.
-8. Run `pnpm install`, then `pnpm lint && pnpm typecheck && pnpm test`, and
-   raise `minPassedTests` to the exact new passing count (section 4) in the
-   same PR.
+1. **Define the use case.** Read `AGENTS.md`, this playbook, `.github/CODEOWNERS`
+   and the core app's README. List the needed screens, data and actions against
+   its **published API**, not its internal schema. For refunds, use only
+   `GET /api/v1/refunds` and `POST /api/v1/refunds/:id/approve|deny` (see the
+   refunds dashboard README). Its unversioned routes are for the dashboard
+   UI. If the contract lacks something, request a platform-owned API change
+   before implementing the team tool; do not read a core database, even for a
+   one-off report.
+2. **Create the workspace.** Add `team-apps/<name>/package.json` with a unique
+   package name and scripts for the app's test/build/dev commands. Add its own
+   `README.md` describing setup, the core API URL/configuration, local data
+   and how to run it alongside the core app. Use `@acme/audit-log` and
+   `@acme/auth-guard` via `"workspace:*"` when the tool needs local auditing
+   or access checks; never import a core app module. Add a separate database
+   for team-owned data such as notes or preferences, not a connection to a
+   core app's SQLite file.
+3. **Call the API from your server.** Put requests to the core app behind a
+   small server-side client. For the POC, the core API reads forwarded
+   `x-mock-role` and `x-mock-user-id` headers when `MOCK_AUTH_ENABLED=true`;
+   the dashboard UI's `mock_role` / `mock_user_id` cookies are *not* the
+   team-app API contract. Use `assignedTo=me` to let the core resolve the
+   caller's id. Do not let a browser supply a trusted user id or role, and
+   do not treat the demo headers as real authentication: any caller can forge
+   them. A production integration needs validated sessions and on-behalf-of
+   tokens. Keep core `403` / `409` errors visible to the caller; do not bypass
+   core authorization or reimplement its decision logic.
+4. **Separate audit ownership.** Let the core API audit core decisions such as
+   refund approval or denial. For changes to the tool's own data, use its
+   own `createAuditLog(store)` instance and audit store. Keep customer data,
+   note bodies and other sensitive payloads out of audit before/after fields.
+   Use `@acme/auth-guard` for access checks on team-owned routes and data;
+   the core API still checks roles independently.
+5. **Wire up the quality gate.** Add an app `tsconfig.json` and include it in
+   the root `typecheck` script (which currently names only the refunds app).
+   Add an app `vitest.config.ts` and its path/glob to the root
+   `vitest.config.ts` `test.projects` (which currently has no team-app entry).
+   Add any required app build to CI with the appropriate owner review: CI
+   currently builds only the refunds dashboard. `pnpm lint` scans the new
+   directory and rejects imports from `apps/**`, but cannot detect runtime
+   paths to a core DB — review those separately. The coverage report still
+   measures only `packages/*`.
+6. **Test the contract and the migration.** Check authorized and no-role
+   requests, `assignedTo=me`, error propagation (including core `403` and
+   repeated-decision `409`), core audit records for core changes, and local
+   audit records for local changes. When migrating, record every legacy
+   screen/flow and known defect in `team-apps/<name>/MIGRATION.md`; add a
+   regression test for each defect. Do not commit legacy tokens or data.
+7. **Review and submit.** Run `pnpm install` to update the lockfile, then
+   `pnpm lint && pnpm typecheck && pnpm test`. Run `pnpm test:ci` and raise
+   `.github/test-baseline.json` to the exact passing count (section 4).
+   Confirm the team-app PR does not change `apps/` or `packages/`; if a core
+   API change is required, make it a separate platform-owned PR. `team-apps/`
+   has no blanket CODEOWNER; `/apps/` requires platform review and `.github/`
+   requires security review once the placeholder teams in CODEOWNERS are set
+   up. The [refunds API reference](apps/refunds-dashboard/README.md#team-app-api-apiv1refunds)
+   includes local curl examples, filters and review actions.
