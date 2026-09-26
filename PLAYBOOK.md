@@ -204,3 +204,35 @@ The guard's own logic is unit-tested in `scripts/tests/`, which runs as the
 - **Guardrail/quality-gate depth**: no risk scoring or auto-merge tiers, no
   write-scope enforcement on agent PRs, no SAST or dependency scanning, no
   secret scanning beyond GitHub defaults.
+
+## 6. Building or migrating a team app
+
+Team apps are employee-built tools under `team-apps/<name>/`. They are
+separate from platform work: `apps/` and `packages/` are platform-owned and a
+team-app PR never changes them.
+
+1. **Read first**: `AGENTS.md`, this playbook, `.github/CODEOWNERS`, and the
+   README of the core app you depend on (e.g. `apps/refunds-dashboard/README.md`)
+   so you know its published API, its rules and who reviews your PR.
+2. **Depend only on a published core API.** `GET /api/v1/refunds` and
+   `POST /api/v1/refunds/:id/{approve,deny}` are the refunds contract. If the
+   API cannot express what you need, stop and file a platform request — do not
+   reach past the API.
+3. **Own your own data.** A team app keeps its own tables/database; a core
+   app's database is off-limits, including read-only queries.
+4. **Audit every state change** through your own
+   `createAuditLog(store)` instance — never through a core app's audit table.
+5. **Authorize server-side**: forward the caller's identity to the core API
+   (`x-mock-role` / `x-mock-user-id` headers today; a token exchange in
+   production) and let the core app's role check decide. Never trust a
+   client-supplied user id.
+6. **Boundaries are mechanical**: no imports from `apps/**` (ESLint
+   `no-restricted-imports`/`no-restricted-modules` fail `pnpm lint` for
+   `team-apps/**` files) and no core DB access.
+7. When migrating a legacy tool, keep an **inventory + defects table** in the
+   app's `MIGRATION.md` (every legacy screen/flow mapped to its replacement,
+   and every known legacy bug listed), and write **one regression test per
+   legacy bug** so a fixed defect can never come back silently.
+8. Run `pnpm install`, then `pnpm lint && pnpm typecheck && pnpm test`, and
+   raise `minPassedTests` to the exact new passing count (section 4) in the
+   same PR.

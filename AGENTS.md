@@ -31,6 +31,16 @@ step-by-step procedures.
 - Every state-changing action in an app must be audited, and every route must be
   role-checked.
 
+## Team apps
+
+- `apps/` is platform-owned: a PR that builds or migrates an employee tool must
+  never change it. Only the platform team touches core apps.
+- Team apps live in `team-apps/<name>/`, own only their own data, and reach
+  core data only through a core app's published API (for refunds:
+  `/api/v1/refunds`, documented in `apps/refunds-dashboard/README.md`).
+- A team app may not import from `apps/**` and may not open or query a core
+  app's database — `pnpm lint` enforces this boundary with an error.
+
 ## Before opening a PR
 
 Run, from the repo root:

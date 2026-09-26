@@ -16,6 +16,8 @@ export const refundRequests = sqliteTable(
     status: text("status", { enum: REFUND_STATUSES }).notNull(),
     /** ISO 8601 */
     requestedAt: text("requested_at").notNull(),
+    /** reviewer id the request is assigned to; null = unassigned queue */
+    assignedTo: text("assigned_to"),
     reviewedBy: text("reviewed_by"),
     /** ISO 8601 */
     reviewedAt: text("reviewed_at"),
