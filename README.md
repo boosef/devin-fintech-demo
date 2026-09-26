@@ -29,6 +29,8 @@ The [dashboard](apps/refunds-dashboard/README.md) lets a reviewer or admin:
 - Inspect an audit trail for each decision. The UI and API share role checks and
   service logic; customer IDs and amounts are encrypted in the local SQLite DB.
 
+![Refunds dashboard showing pending synthetic requests, review actions and status filters](apps/refunds-dashboard/screenshot.png)
+
 In development, use **Viewing as** to switch between reviewer, admin and no
 role. This is mock auth, not a sign-in system. See the [dashboard setup and API
 guide](apps/refunds-dashboard/README.md#setup) for the key, seed data and API
