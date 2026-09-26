@@ -11,7 +11,8 @@ packages.
 
 ## Setup
 
-From the repo root:
+From the repo root (see the [root README](../../README.md#getting-started) for
+Node 22 and pnpm 12.6.0 setup):
 
 ```bash
 pnpm install
@@ -68,9 +69,22 @@ Route handlers (JSON body required, HTTP status from the service error):
 - `POST /api/refunds/:id/approve` `{ "note"?: string }`
 - `POST /api/refunds/:id/deny` `{ "reason": string }`
 
-Status codes: `403` no reviewer/admin role, `400` validation (e.g. empty deny
-reason), `404` unknown id, `409` already reviewed, `500` audit write failed
-(the request stays pending).
+The API uses the same `mock_role` and `mock_user_id` cookies as the UI, not
+caller-supplied role headers. With `MOCK_AUTH_ENABLED=true`, choose a pending
+request ID from the Requests page and call, for example:
+
+```bash
+REFUND_ID="paste-a-pending-request-id-here"
+curl -i -X POST "http://localhost:3000/api/refunds/$REFUND_ID/deny" \
+  -H 'Content-Type: application/json' \
+  --cookie 'mock_role=reviewer; mock_user_id=demo-reviewer' \
+  --data '{"reason":"Duplicate charge"}'
+```
+
+Status codes: `403` no reviewer/admin role (or mock auth disabled), `400`
+invalid JSON or validation (e.g. empty deny reason), `404` unknown id, `409`
+already reviewed, `415` non-JSON content type, `500` audit write failed (the
+request stays pending).
 
 ## Rules the service enforces
 
@@ -102,6 +116,13 @@ in SQL. The filters (status, requested date) use plaintext columns.
 KMS/HSM with envelope encryption (per-record or per-tenant data keys wrapped
 by a KMS key), key rotation with re-encryption (the `v1:` prefix leaves room
 for that), and access-logged decryption.
+
+Changing `REFUNDS_ENCRYPTION_KEY` does not rotate existing ciphertext: rows
+encrypted with the old key can no longer be decrypted with the new one. For
+this **synthetic local database only**, stop `pnpm dev` and re-run `pnpm db:seed`
+from this app directory after changing the key. Seeding deletes the local
+database (including decisions and audit records) and creates fresh requests;
+it is not a data-preserving rotation procedure.
 
 ## Auth
 

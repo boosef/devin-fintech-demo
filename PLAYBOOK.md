@@ -4,9 +4,9 @@ How to build on the shared platform layer in this monorepo.
 
 ## 1. Adding a new internal app
 
-1. Create the app under `apps/<name>` (e.g. `apps/refunds-dashboard`). Nothing
-   else in the repo needs to change: `pnpm-workspace.yaml` already includes
-   `apps/*`.
+1. Create the app under `apps/<name>` (e.g. `apps/refunds-dashboard`).
+   `pnpm-workspace.yaml` already includes `apps/*`, so pnpm discovers it as a
+   workspace package.
 2. Add the platform packages as workspace dependencies in
    `apps/<name>/package.json`:
 
@@ -35,11 +35,14 @@ How to build on the shared platform layer in this monorepo.
    };
    ```
 
-4. Extend `tsconfig.base.json`'s `include` (or add an app `tsconfig.json` that
-   extends it) so `pnpm typecheck` covers the new app, and add a
-   `vitest.config.ts` in the app — the root
-   `test.projects: ["packages/*", "apps/*/vitest.config.ts"]` glob picks it up
-   automatically, so the app's tests count towards the quality gate.
+4. Add an app `tsconfig.json` that extends `tsconfig.base.json`, then add
+   `tsc -p apps/<name>/tsconfig.json --noEmit` to the root `typecheck` script
+   in `package.json`. The root script names
+   `apps/refunds-dashboard/tsconfig.json` explicitly; new apps are **not**
+   typechecked automatically. Add a `vitest.config.ts` in the app — the root
+   `test.projects` glob for `apps/*/vitest.config.ts` picks up its tests, so
+   they count towards the quality gate. If the new app has a build, add it to
+   the CI workflow as well; CI currently builds the refunds dashboard only.
 5. Non-negotiable rules: **every state-changing action is audited** through
    `@acme/audit-log`, and **every route is role-checked** through
    `@acme/auth-guard`. No app-local audit tables and no app-local header
@@ -145,8 +148,13 @@ filter, so it also runs on PRs targeting feature branches):
 1. `pnpm install --frozen-lockfile` — the lockfile must be committed and current.
 2. `pnpm lint` — ESLint flat config; any error fails the build.
 3. `pnpm typecheck` — `tsc --noEmit` with `strict: true`; any error fails.
-4. `pnpm test:ci` — Vitest with v8 coverage, writing `test-results.json`.
-5. **Test-count baseline guard** — `node scripts/check-test-baseline.mjs`.
+4. `pnpm --filter @acme/refunds-dashboard build` — build the Next.js app.
+5. `pnpm test:ci` — Vitest with v8 coverage, writing `test-results.json`.
+6. **Test-count baseline guard** — `node scripts/check-test-baseline.mjs`.
+
+The test count includes the app's and CI helper's tests, but the coverage
+configuration measures only `packages/*/src/**/*.ts`; app and script coverage
+is not measured in this POC.
 
 The guard reads `test-results.json` and `.github/test-baseline.json`
 (`{ "minPassedTests": N }`) and is a **ratchet**: the baseline must equal the
@@ -182,11 +190,12 @@ The guard's own logic is unit-tested in `scripts/tests/`, which runs as the
 ## 5. What's explicitly out of scope for this POC
 
 - **Real SSO**: no JWT or session validation, no Entra ID/OIDC integration, no
-  IdP group-to-role mapping, no token expiry or revocation. Auth is mock headers
-  behind an env flag.
-- **Persistent audit storage**: no database, no append-only DB grants, no
-  retention policy, no tamper evidence (e.g. hash chaining), no export to a
-  SIEM. The store is in-process and dies with the process.
+  IdP group-to-role mapping, no token expiry or revocation. The shared auth
+  guard reads mock headers behind an env flag; the dashboard bridges dev-only
+  cookies to those headers.
+- **Production audit storage**: the shared package's default store is in-memory;
+  the dashboard persists audit rows in SQLite. Neither has production DB grants,
+  retention policy, tamper evidence (e.g. hash chaining), or SIEM export.
 - **Spend/cost governance**: no per-session or per-team ACU budgets, no
   iteration caps, no alerts on agent spend.
 - **Agent identity layer**: agents do not get their own scoped, revocable
