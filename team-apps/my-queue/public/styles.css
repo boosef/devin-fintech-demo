@@ -1,0 +1,20 @@
+body { font-family: -apple-system, Segoe UI, Arial, sans-serif; background: #f4f6fb; margin: 0; padding: 24px; color: #222; }
+h1 { margin: 0 0 4px; font-size: 24px; }
+.sub { color: #666; margin-bottom: 16px; }
+.banner { background: #fff3cd; border: 1px solid #ffe69c; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 13px; }
+.error { background: #f8d7da; border: 1px solid #f5c2c7; color: #842029; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 13px; }
+.cards { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.card { background: white; border-radius: 10px; padding: 14px 18px; box-shadow: 0 1px 3px rgba(0,0,0,.08); min-width: 160px; }
+.card .num { font-size: 26px; font-weight: bold; }
+.card .lbl { font-size: 12px; color: #777; text-transform: uppercase; }
+table { width: 100%; border-collapse: collapse; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; font-size: 14px; vertical-align: top; }
+th { background: #3b5bdb; color: white; font-weight: 600; }
+tr.overdue td { background: #fff0f0; }
+.badge { padding: 2px 8px; border-radius: 10px; font-size: 12px; background: #e7f5ff; }
+.late { background: #ffc9c9; color: #a61e1e; font-weight: bold; }
+.note { font-size: 13px; margin-bottom: 6px; }
+.note-meta { color: #888; font-size: 11px; }
+textarea { width: 100%; min-height: 34px; font-family: inherit; font-size: 13px; }
+button { background: #3b5bdb; color: white; border: 0; border-radius: 6px; padding: 6px 12px; cursor: pointer; margin-right: 4px; margin-top: 4px; }
+button.secondary { background: #adb5bd; }
