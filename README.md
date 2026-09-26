@@ -1,55 +1,83 @@
-# devin-fintech-demo — internal-tools platform layer
+# devin-fintech-demo — internal tools
 
-Shared, reusable infrastructure for a monorepo of internal fintech tools. Apps
-(a refunds dashboard, a KYC checker, a feature-flag enabler) import these
-packages rather than reimplementing audit logging or access control.
+Shared audit logging and role checks for internal fintech tools, with a working
+[refunds review dashboard](apps/refunds-dashboard/README.md) built on those
+packages. A KYC checker and a feature-flag enabler are **planned**; neither is
+implemented here yet.
 
-This is a proof of concept for a demo. It works and it is tested, but it is not
-production-grade — see PLAYBOOK.md section 5 for the explicit out-of-scope list.
+This is a proof of concept with synthetic data, not a production deployment.
+See [PLAYBOOK.md](PLAYBOOK.md#5-whats-explicitly-out-of-scope-for-this-poc) and
+the [dashboard's production gaps](apps/refunds-dashboard/README.md#out-of-scope).
 
 ## Layout
 
 ```
-packages/audit-log    @acme/audit-log   append-only audit records
-packages/auth-guard   @acme/auth-guard  mock role-based access checks
-apps/                 internal apps (empty for now)
-scripts/              CI helper scripts
-.github/              quality-gate workflow, CODEOWNERS, test baseline
+packages/audit-log       @acme/audit-log          append-only audit records
+packages/auth-guard      @acme/auth-guard         mock role-based access checks
+apps/refunds-dashboard   @acme/refunds-dashboard  refunds review UI and API
+scripts/                 CI helper scripts
+.github/                 quality-gate workflow, CODEOWNERS, test baseline
 ```
+
+## Refunds dashboard at a glance
+
+The [dashboard](apps/refunds-dashboard/README.md) lets a reviewer or admin:
+
+- Filter synthetic refund requests by status and requested date.
+- Approve with an optional note or deny with a required reason; a request can
+  leave pending only once.
+- Inspect an audit trail for each decision. The UI and API share role checks and
+  service logic; customer IDs and amounts are encrypted in the local SQLite DB.
+
+In development, use **Viewing as** to switch between reviewer, admin and no
+role. This is mock auth, not a sign-in system. See the [dashboard setup and API
+guide](apps/refunds-dashboard/README.md#setup) for the key, seed data and API
+examples.
 
 ## Getting started
 
+Use Node 22 (`.nvmrc`; install it with `nvm install` if needed). Corepack uses
+the pinned `pnpm@12.6.0` in `package.json`: an older global pnpm may reject the
+lockfile as incompatible.
+
 ```bash
-nvm use            # Node 22 (see .nvmrc); engines requires >=22
-pnpm install
+nvm use
+corepack enable
+pnpm install --frozen-lockfile
 pnpm lint && pnpm typecheck && pnpm test
 ```
 
-Useful scripts: `pnpm test:ci` (coverage + `test-results.json`),
-`pnpm --filter @acme/audit-log test` (single package).
+To run the app, [set its encryption key and seed the local
+database](apps/refunds-dashboard/README.md#setup), then run
+`pnpm --filter @acme/refunds-dashboard dev`. Useful scripts:
+`pnpm test:ci` (coverage + `test-results.json`),
+`pnpm --filter @acme/audit-log test` (single package). The test suite includes
+the dashboard and CI helper tests, but **coverage measures only `packages/*`**,
+not the app or scripts.
 
 ## Decisions
 
 - **pnpm workspaces, not Turborepo.** The POC has ~2-4 packages, and
   Turborepo's build-caching value only shows up at higher package counts.
   *Revisit if we exceed ~10 packages.*
-- **No build step.** Each package's `exports` and `types` point at
-  `./src/index.ts`; apps depend on them with `"workspace:*"`. A Next.js app must
-  therefore list `@acme/audit-log` and `@acme/auth-guard` in
-  `transpilePackages` in its `next.config.mjs`.
+- **No build step for shared packages.** Each package's `exports` and `types`
+  point at `./src/index.ts`; apps depend on them with `"workspace:*"`. A Next.js
+  app must therefore list `@acme/audit-log` and `@acme/auth-guard` in
+  `transpilePackages` in its `next.config.mjs`. CI builds the refunds dashboard.
 - **TypeScript `strict: true` everywhere**, Vitest with the v8 coverage provider
   from a single root `vitest.config.ts` (`test.projects`), ESLint flat config
   (`eslint.config.mjs`) with typescript-eslint `recommended`.
 
 ## Quality gate
 
-Every PR (against any branch) runs lint, typecheck, tests, and a **test-count
-baseline ratchet** that fails if the passing-test count does not exactly match
-`minPassedTests` in `.github/test-baseline.json`, if that value is below the one
-on the base branch, or if any test is skipped, todo or failing. See
-PLAYBOOK.md section 4 and AGENTS.md.
+Every PR (against any branch) runs lint, typecheck, the dashboard build, tests,
+and a **test-count baseline ratchet**. The ratchet fails if the passing-test
+count does not exactly match `minPassedTests` in `.github/test-baseline.json`,
+if that value is below the one on the base branch, or if any test is skipped,
+todo or failing. See [PLAYBOOK.md](PLAYBOOK.md#4-what-the-quality-gate-checks-and-how-to-update-the-test-baseline)
+and [AGENTS.md](AGENTS.md).
 
-## Manual admin steps this PR cannot do itself
+## Manual repository admin steps
 
 1. Replace the placeholder team `@acme-org/security-reviewers` in
    `.github/CODEOWNERS` with a real GitHub team that has write access to this
