@@ -1,6 +1,12 @@
 # Paths that require review from the security reviewers team.
-# NOTE: @acme-org/security-reviewers is a placeholder; replace it with a real
-# GitHub team that has write access to this repository.
+# NOTE: @acme-org/security-reviewers and @acme-org/platform-team are both
+# placeholders; a repo admin must replace them with real GitHub teams that have
+# write access to this repository. Until then GitHub reports an "unknown owner"
+# error for these slugs on the CODEOWNERS check.
+
+# Platform team owns everything under apps/ and team-apps/ stays unowned;
+# the more specific security-reviewer patterns below still take precedence.
+/apps/ @acme-org/platform-team
 
 /packages/auth-guard/ @acme-org/security-reviewers
 /packages/audit-log/ @acme-org/security-reviewers

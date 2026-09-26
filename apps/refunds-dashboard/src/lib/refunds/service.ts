@@ -2,7 +2,7 @@ import "server-only";
 
 import { createAuditLog, type AuditLog, type AuditRecord } from "@acme/audit-log";
 import { hasRole, type MockUser, type Role } from "@acme/auth-guard";
-import { and, desc, eq, gte, lte, type SQL } from "drizzle-orm";
+import { and, asc, eq, gte, lte, type SQL } from "drizzle-orm";
 
 import { defaultDatabasePath, openDatabase, type RefundsDb } from "@/db/client";
 import { refundRequests, REFUND_STATUSES, type RefundRequestRow, type RefundStatus } from "@/db/schema";
@@ -22,6 +22,7 @@ export type RefundRequest = {
   reason: string;
   status: RefundStatus;
   requestedAt: string;
+  assignedTo: string | null;
   reviewedBy: string | null;
   reviewedAt: string | null;
   decisionReason: string | null;
@@ -34,6 +35,8 @@ export type RefundFilter = {
   from?: string;
   /** inclusive, YYYY-MM-DD (UTC) */
   to?: string;
+  /** restrict to requests assigned to this reviewer id */
+  assignedTo?: string;
 };
 
 export type ApproveInput = { user: MockUser | null; id: string; note?: string };
@@ -71,6 +74,7 @@ export function createRefundService({ db, auditLog, encryptionKey, now = () => n
       status: row.status,
       requestedAt: row.requestedAt,
       reviewedBy: row.reviewedBy,
+      assignedTo: row.assignedTo,
       reviewedAt: row.reviewedAt,
       decisionReason: row.decisionReason,
     };
@@ -160,12 +164,14 @@ export function createRefundService({ db, auditLog, encryptionKey, now = () => n
       if (status !== "all") conditions.push(eq(refundRequests.status, status));
       if (filter.from) conditions.push(gte(refundRequests.requestedAt, startOfUtcDay(filter.from, "from")));
       if (filter.to) conditions.push(lte(refundRequests.requestedAt, endOfUtcDay(filter.to, "to")));
+      if (filter.assignedTo) conditions.push(eq(refundRequests.assignedTo, filter.assignedTo));
 
       const rows = db
         .select()
         .from(refundRequests)
         .where(conditions.length > 0 ? and(...conditions) : undefined)
-        .orderBy(desc(refundRequests.requestedAt))
+        // FIFO queue: the oldest request is always worked first.
+        .orderBy(asc(refundRequests.requestedAt))
         .all();
       return rows.map(toRefundRequest);
     },

@@ -35,17 +35,26 @@ export function openTestDb(file = tempDbFile()): RefundsDb {
   return openDatabase(file, { migrationsFolder: MIGRATIONS_FOLDER });
 }
 
-export function createContext(options: { store?: (db: RefundsDb) => AuditLogStore } = {}) {
+export function createContext(
+  options: { store?: (db: RefundsDb) => AuditLogStore; now?: () => Date } = {},
+) {
   const db = openTestDb();
   const store = options.store?.(db) ?? new SqliteAuditLogStore(db);
   const auditLog: AuditLog = createAuditLog(store);
-  const service = createRefundService({ db, auditLog, encryptionKey: TEST_KEY });
+  const service = createRefundService({ db, auditLog, encryptionKey: TEST_KEY, now: options.now });
   return { db, store, auditLog, service };
 }
 
 export function insertRefund(
   db: RefundsDb,
-  overrides: Partial<{ id: string; customerId: string; amountCents: number; status: RefundStatus; requestedAt: string }> = {},
+  overrides: Partial<{
+    id: string;
+    customerId: string;
+    amountCents: number;
+    status: RefundStatus;
+    requestedAt: string;
+    assignedTo: string | null;
+  }> = {},
 ) {
   const row = {
     id: overrides.id ?? crypto.randomUUID(),
@@ -53,6 +62,7 @@ export function insertRefund(
     amountCents: overrides.amountCents ?? 4321,
     status: overrides.status ?? "pending",
     requestedAt: overrides.requestedAt ?? "2026-09-01T10:00:00.000Z",
+    assignedTo: overrides.assignedTo ?? null,
   };
   db.insert(refundRequests)
     .values({
@@ -62,6 +72,7 @@ export function insertRefund(
       reason: "Duplicate charge",
       status: row.status,
       requestedAt: row.requestedAt,
+      assignedTo: row.assignedTo,
     })
     .run();
   return row;

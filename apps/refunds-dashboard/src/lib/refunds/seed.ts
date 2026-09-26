@@ -24,6 +24,16 @@ const REASONS = [
 /** Synthetic reviewer used only to write the seed decisions through the service. */
 const SEED_REVIEWER: MockUser = { id: "seed-reviewer", email: "seed-reviewer@example.test", role: "reviewer" };
 
+/**
+ * Assignee names carried over from the legacy tool, mapped onto the two
+ * "Viewing as" personas so each one sees its own seeded queue.
+ */
+const LEGACY_ASSIGNEES: Record<string, string> = {
+  "priya.r": "demo-reviewer",
+  "sam.k": "demo-admin",
+};
+const LEGACY_ASSIGNEE_NAMES = Object.keys(LEGACY_ASSIGNEES);
+
 export type SeededRequest = { id: string; customerId: string; amountCents: number };
 
 /**
@@ -51,6 +61,7 @@ export async function seedRefunds({
       amountCents: 1000 + n * 250,
     };
     const requestedAt = new Date(now.getTime() - Math.round(((i * 29) / (SEED_REQUEST_COUNT - 1)) * DAY_MS) - n * 60_000);
+    const legacyAssignee = LEGACY_ASSIGNEE_NAMES[i % LEGACY_ASSIGNEE_NAMES.length]!;
     db.insert(refundRequests)
       .values({
         id: request.id,
@@ -59,6 +70,7 @@ export async function seedRefunds({
         reason: REASONS[i % REASONS.length] ?? "Other",
         status: "pending",
         requestedAt: requestedAt.toISOString(),
+        assignedTo: LEGACY_ASSIGNEES[legacyAssignee] ?? null,
       })
       .run();
     seeded.push(request);

@@ -72,6 +72,71 @@ Status codes: `403` no reviewer/admin role, `400` validation (e.g. empty deny
 reason), `404` unknown id, `409` already reviewed, `500` audit write failed
 (the request stays pending).
 
+## Team-app API: `/api/v1/refunds`
+
+**This versioned JSON API is the ONLY interface team-apps (employee-built
+tools under `team-apps/`) may depend on.** Team apps may not import from
+`apps/**` or open this database — `pnpm lint` enforces the boundary. The older
+unversioned routes above exist for the dashboard itself and are not a
+supported contract.
+
+Identity for API callers comes from the forwarded `x-mock-role` /
+`x-mock-user-id` headers, read by `getMockUser` from `@acme/auth-guard`;
+`hasRole` then requires `reviewer` or `admin` on every route.
+
+**Production gap:** identity is forwarded mock headers today — any caller can
+claim any role. Production would authenticate the caller and run a token
+exchange (on-behalf-of) so the API receives a verifiable identity, not
+headers.
+
+### `GET /api/v1/refunds`
+
+Query params:
+
+| Param | Shape | Notes |
+| --- | --- | --- |
+| `status` | `pending` \| `approved` \| `denied` \| `all` | defaults to `pending`; anything else is `400` |
+| `from` / `to` | `YYYY-MM-DD` | inclusive UTC day bounds on `requestedAt`; malformed dates are `400` |
+| `assignedTo` | `me` or a reviewer id | `me` resolves to the authenticated user's id **server-side** — a client-supplied user id is never trusted as `me` |
+
+Response `200`: `{ "items": RefundItem[] }`, oldest request first, where each
+item is the decrypted record plus two server-computed fields:
+
+```json
+{
+  "id": "…",
+  "customerId": "cust_demo_0001",
+  "amountCents": 1250,
+  "reason": "Duplicate charge on statement",
+  "status": "pending",
+  "requestedAt": "2026-09-20T10:00:00.000Z",
+  "assignedTo": "demo-reviewer",
+  "reviewedBy": null,
+  "reviewedAt": null,
+  "decisionReason": null,
+  "ageDays": 6,
+  "overdue": true
+}
+```
+
+`ageDays` is whole days since `requestedAt` against the server's clock
+(injectable `now()` in `src/lib/refunds/api-v1.ts`); `overdue` is
+`ageDays > SLA_DAYS` with `SLA_DAYS = 3` in `src/lib/refunds/sla.ts`.
+
+### `POST /api/v1/refunds/:id/approve` and `POST /api/v1/refunds/:id/deny`
+
+JSON body: `{ "note"?: string }` for approve, `{ "reason": string }`
+(required, non-empty) for deny. Response `200` is the same `RefundItem` shape
+as above, post-review. These are thin wrappers over the same
+`approveRefund`/`denyRefund` service functions the dashboard uses: a request
+leaves `pending` exactly once and every decision writes exactly one audit
+record containing only `status`, `reviewed_by`, `reviewed_at` and
+`decision_reason` — never the customer id or amount.
+
+Error responses everywhere are `{ "error": string, "message": string }`:
+`403` no reviewer/admin role, `400` validation (bad status/date, empty deny
+reason), `404` unknown id, `409` already reviewed.
+
 ## Rules the service enforces
 
 - Only `reviewer` or `admin` (via `hasRole` from `@acme/auth-guard`) can list
@@ -137,6 +202,17 @@ transactional outbox, on Postgres (this app would migrate from SQLite to
 Postgres), with the app's DB role granted INSERT/SELECT only on the audit
 table, plus retention and tamper evidence. `db:seed` deletes the local dev
 database file; nothing in the app itself removes audit rows.
+
+## Manual admin steps
+
+These need a repository admin; nothing in code can do them:
+
+1. In `.github/CODEOWNERS`, replace the placeholder slugs
+   `@acme-org/platform-team` (owns `/apps/`) and
+   `@acme-org/security-reviewers` with real GitHub teams that have write
+   access to this repository.
+2. Until that happens, GitHub's CODEOWNERS check reports an **"unknown owner"
+   error** for those slugs — this is expected, not a defect in the file.
 
 ## Out of scope
 

@@ -1,0 +1,1 @@
+ALTER TABLE `refund_requests` ADD `assigned_to` text;
