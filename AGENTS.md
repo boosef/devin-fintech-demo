@@ -14,8 +14,12 @@ step-by-step procedures.
 
 - Never delete, skip (`it.skip`, `describe.skip`, `it.todo`) or weaken a test to
   make CI pass. Fix the code, or stop and explain the problem in the PR.
-- Never lower `minPassedTests` in `.github/test-baseline.json`. If a PR
-  legitimately adds tests, raise it in the same PR to the new passing count.
+- The baseline is a ratchet: `minPassedTests` in `.github/test-baseline.json`
+  must equal the number of passing tests exactly, and may only go up. If your
+  PR adds tests, raise it in the same PR to the new passing count — leaving it
+  stale fails the build, exactly like deleting a test does.
+- Never lower `minPassedTests`, and never set it below the value on the PR's
+  base branch; CI checks both.
 - Skipped and todo tests fail the build by design: a skipped test is a removed
   test.
 

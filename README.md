@@ -44,8 +44,9 @@ Useful scripts: `pnpm test:ci` (coverage + `test-results.json`),
 ## Quality gate
 
 Every PR (against any branch) runs lint, typecheck, tests, and a **test-count
-baseline guard** that fails if the passing-test count drops below
-`.github/test-baseline.json` or if any test is skipped, todo or failing. See
+baseline ratchet** that fails if the passing-test count does not exactly match
+`minPassedTests` in `.github/test-baseline.json`, if that value is below the one
+on the base branch, or if any test is skipped, todo or failing. See
 PLAYBOOK.md section 4 and AGENTS.md.
 
 ## Manual admin steps this PR cannot do itself

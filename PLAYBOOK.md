@@ -149,21 +149,35 @@ filter, so it also runs on PRs targeting feature branches):
 5. **Test-count baseline guard** — `node scripts/check-test-baseline.mjs`.
 
 The guard reads `test-results.json` and `.github/test-baseline.json`
-(`{ "minPassedTests": N }`) and fails if:
+(`{ "minPassedTests": N }`) and is a **ratchet**: the baseline must equal the
+passing count exactly, and may only ever go up. It fails if:
 
+- `numPassedTests > minPassedTests` — you added tests but left the baseline
+  stale, so a later PR could delete them and still pass. Message:
+  `Passed N tests but baseline is M. Raise minPassedTests to N in
+  .github/test-baseline.json in this PR.`;
 - `numPassedTests < minPassedTests` — tests were deleted, or stopped passing;
+- `minPassedTests` is lower than the value on the PR's base branch (read in CI
+  with `git show origin/$GITHUB_BASE_REF:.github/test-baseline.json`; a baseline
+  that does not exist there yet counts as `0`) — the ratchet was filed down;
 - `numPendingTests > 0` or `numTodoTests > 0` — a skipped or todo test counts as
   a removed test, which is why skipping fails the build; or
 - `numFailedTests > 0`.
 
 It exists to stop the failure mode where a failing test is "fixed" by deleting
-or skipping it instead of fixing the bug.
+or skipping it instead of fixing the bug — and, with the exact-match and
+base-branch rules, to stop the baseline going stale so that deletion becomes
+invisible later.
 
-**Raising the baseline:** if your PR legitimately adds tests, run `pnpm test:ci`
+**Raising the baseline:** any PR that adds tests must run `pnpm test:ci`
 locally, read the new passing count, and set `minPassedTests` to that exact
-number in `.github/test-baseline.json` **in the same PR**. Never lower it.
-`.github/**` is code-owned, so any change to the baseline — including lowering
-it — requires review from the security reviewers team.
+number in `.github/test-baseline.json` **in the same PR** — this is not
+optional, the build fails without it. Never lower it. `.github/**` is
+code-owned, so any change to the baseline requires review from the security
+reviewers team.
+
+The guard's own logic is unit-tested in `scripts/tests/`, which runs as the
+`scripts` Vitest project and counts towards the same baseline.
 
 ## 5. What's explicitly out of scope for this POC
 

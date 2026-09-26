@@ -12,6 +12,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch base branch
+        run: git fetch --no-tags origin "$BASE_BRANCH:refs/remotes/origin/$BASE_BRANCH" || true
+        env:
+          BASE_BRANCH: ${{ github.base_ref }}
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -38,3 +45,5 @@ jobs:
 
       - name: Test-count baseline guard
         run: node scripts/check-test-baseline.mjs
+        env:
+          BASE_REF: origin/${{ github.base_ref }}
