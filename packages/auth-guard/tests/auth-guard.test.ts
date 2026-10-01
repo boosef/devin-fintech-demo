@@ -59,8 +59,4 @@ describe("hasRole", () => {
     expect(hasRole(null, ["admin"])).toBe(false);
     expect(hasRole(reviewer, [])).toBe(false);
   });
-
-  it("returns false for a null user even with a non-empty allow list", () => {
-    expect(hasRole(null, ["admin", "reviewer"])).toBe(false);
-  });
 });
