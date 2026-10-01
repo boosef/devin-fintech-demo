@@ -42,6 +42,9 @@ step-by-step procedures.
 
 - `apps/` is platform-owned: a PR that builds or migrates an employee tool must
   never change it. Only the platform team touches core apps.
+- Create a team app with `pnpm create-team-app <name>`, never by hand or by
+  copying another app; it wires scripts, tsconfig, Vitest and the seeded
+  `test-baseline.json`. Treat its output as generated, then build on it.
 - Team apps live in `team-apps/<name>/`, own only their own data, and reach
   core data only through a core app's published API (for refunds:
   `/api/v1/refunds`, documented in `apps/refunds-dashboard/README.md`).
@@ -63,8 +66,8 @@ pnpm lint && pnpm typecheck && pnpm test
 All three must pass with zero errors. Each runs through Turborepo
 (`turbo run <task>`) across every workspace package, so a new package or app
 is only checked once its `package.json` defines `lint`, `typecheck` and `test`
-scripts (and `build` if it has one). That wiring is manual; see PLAYBOOK.md
-section 6. `pnpm test` runs each package's tests and the `scripts/` tests
+scripts (and `build` if it has one). `pnpm create-team-app` adds them for
+team apps; core apps are wired by hand (PLAYBOOK.md section 1). `pnpm test` runs each package's tests and the `scripts/` tests
 (`//#test:scripts`) and writes each one's `test-results.json`; `pnpm test:ci`
 then runs the per-package baseline guard.
 

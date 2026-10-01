@@ -80,8 +80,10 @@ the cached root task `//#test:scripts` (`pnpm test:scripts` runs them alone).
 `pnpm test:ci` runs `turbo run test`, then checks every package against its own
 `test-baseline.json`.
 Coverage is not collected in CI; `pnpm vitest run --coverage` reports it
-locally for `packages/*` only. New team apps are wired up by hand; see the
-[playbook](PLAYBOOK.md#6-building-or-migrating-a-team-app).
+locally for `packages/*` only. Scaffold new team apps with
+`pnpm create-team-app <name>` (scripts, tsconfig, Vitest and a seeded
+`test-baseline.json` included); see the
+[playbook](PLAYBOOK.md#adding-a-team-app).
 
 ## Build caching
 

@@ -14,7 +14,8 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:scripts": "vitest run --project scripts --reporter=default --reporter=json --outputFile=scripts/test-results.json",
-    "test:ci": "turbo run test && node scripts/check-test-baselines.mjs"
+    "test:ci": "turbo run test && node scripts/check-test-baselines.mjs",
+    "create-team-app": "node scripts/create-team-app.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",

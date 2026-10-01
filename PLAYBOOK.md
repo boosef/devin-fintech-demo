@@ -260,9 +260,9 @@ own `scripts/test-baseline.json`.
 - **Agent identity layer**: agents do not get their own scoped, revocable
   credentials; `actorType` and `onBehalfOf` are recorded as claims but are not
   verified.
-- **Workspace generator**: nothing scaffolds a new app or team app yet, so
-  its `tsconfig.json`, `lint`/`typecheck`/`test`/`build` scripts and
-  `test-baseline.json` are added by hand (sections 1 and 6).
+- **Core-app generator**: `pnpm create-team-app` scaffolds team apps only
+  (section 6); a new core app's `tsconfig.json`, scripts and
+  `test-baseline.json` are still added by hand (section 1).
 - **Guardrail/quality-gate depth**: no risk scoring or auto-merge tiers, no
   write-scope enforcement on agent PRs, no SAST or dependency scanning, no
   secret scanning beyond GitHub defaults.
@@ -274,6 +274,28 @@ includes `team-apps/*`. Core apps in `apps/` own their APIs and data, and
 `packages/` owns shared platform behavior. Follow this sequence for a new
 team request or a legacy-tool migration:
 
+### Adding a team app
+
+Always start from the generator; do not hand-write the workspace wiring:
+
+```bash
+pnpm create-team-app <name>   # lowercase letters, digits, dashes
+pnpm install
+pnpm lint && pnpm typecheck && pnpm test:ci
+```
+
+It creates `team-apps/<name>/` as package `@acme/team-<name>` with
+`@acme/audit-log` and `@acme/auth-guard` as `workspace:*` dependencies, the
+standard `lint` / `typecheck` / `test` scripts (Turborepo picks it up as its
+own package), a `tsconfig.json` extending `../../tsconfig.base.json` (the
+base config does not glob `team-apps/`), a `vitest.config.ts` (also
+discovered by the root `vitest.config.ts`), a stub `src/index.ts`, one passing
+test and `test-baseline.json` seeded to `{ "minPassedTests": 1 }`, so it
+passes the baseline guard as generated. Raise that baseline as you add tests
+(section 4). The `apps/**` import boundary applies from the first commit:
+`pnpm lint` rejects any import of a core app's code. The generator is
+smoke-tested in `scripts/tests/create-team-app.test.mjs`.
+
 1. **Define the use case.** Read `AGENTS.md`, this playbook, `.github/CODEOWNERS`
    and the core app's README. List the needed screens, data and actions against
    its **published API**, not its internal schema. For refunds, use only
@@ -282,9 +304,8 @@ team request or a legacy-tool migration:
    UI. If the contract lacks something, request a platform-owned API change
    before implementing the team tool; do not read a core database, even for a
    one-off report.
-2. **Create the workspace.** Add `team-apps/<name>/package.json` with a unique
-   package name and scripts for the app's test/build/dev commands. Add its own
-   `README.md` describing setup, the core API URL/configuration, local data
+2. **Create the workspace** with `pnpm create-team-app <name>` (above). Add
+   any build/dev scripts to its `package.json` and extend its `README.md` with setup, the core API URL/configuration, local data
    and how to run it alongside the core app. Use `@acme/audit-log` and
    `@acme/auth-guard` via `"workspace:*"` when the tool needs local auditing
    or access checks; never import a core app module. Add a separate database
@@ -306,13 +327,10 @@ team request or a legacy-tool migration:
    note bodies and other sensitive payloads out of audit before/after fields.
    Use `@acme/auth-guard` for access checks on team-owned routes and data;
    the core API still checks roles independently.
-5. **Wire up the quality gate.** This is manual until a workspace generator
-   lands. Add an app `tsconfig.json` extending `../../tsconfig.base.json` and
-   `"lint": "eslint ."`, `"typecheck": "tsc --noEmit"`,
-   `"test": "vitest run --reporter=default --reporter=json --outputFile=test-results.json"`
-   (and `build`, if any) to its `package.json`; Turborepo then runs them in
-   `pnpm lint`/`typecheck`/`test` and CI. Add an app `vitest.config.ts` and
-   `team-apps/<name>/test-baseline.json` — your team owns that file.
+5. **Keep the quality gate wired.** The generator already adds the
+   `lint`, `typecheck` and `test` scripts, `tsconfig.json`, `vitest.config.ts`
+   and `team-apps/<name>/test-baseline.json` (your team owns that file); add a
+   `build` script if the app has one so Turborepo runs it too.
    `pnpm lint` rejects imports from `apps/**` in the new directory, but cannot
    detect runtime paths to a core DB — review those separately. The coverage
    report still measures only `packages/*`.
