@@ -2,8 +2,7 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    name: "my-queue",
-    environment: "node",
+    name: "@acme/team-my-queue",
     include: ["tests/**/*.test.ts"],
   },
 });
