@@ -184,7 +184,7 @@ Coverage is not collected in CI; `pnpm vitest run --coverage` reports it for
 `packages/*/src/**/*.ts` locally.
 
 The guard checks every workspace dir from the `pnpm-workspace.yaml` globs plus
-`scripts`, skipping dirs with no `test` script and no `*.test.*` files. Each
+`scripts`, skipping dirs with no `test` script and no `*.test.*` / `*.spec.*` files. Each
 remaining dir needs a `test-baseline.json` (`{ "minPassedTests": N }`) next to
 its `test-results.json`, and each baseline is its own **ratchet**: it must equal
 that package's passing count exactly, and may only ever go up. Failures name the

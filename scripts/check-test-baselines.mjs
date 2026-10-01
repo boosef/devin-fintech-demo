@@ -17,7 +17,7 @@ export const EXTRA_DIRS = ["scripts"];
 const BASELINE = "test-baseline.json";
 const RESULTS = "test-results.json";
 const SKIP_DIRS = new Set(["node_modules", ".next", ".turbo", "coverage", "dist"]);
-const TEST_FILE = /\.test\.[cm]?[jt]sx?$/;
+const TEST_FILE = /\.(test|spec)\.[cm]?[jt]sx?$/;
 
 /** Reads the `packages:` globs from pnpm-workspace.yaml, plus EXTRA_DIRS. */
 export function parseWorkspaceGlobs(yaml) {
@@ -74,6 +74,14 @@ export function readBaseMinPassedTests(ref, file, showFile = defaultShowFile) {
   }
   const parsed = JSON.parse(raw);
   return typeof parsed.minPassedTests === "number" ? parsed.minPassedTests : 0;
+}
+
+function readBaseFile(ref, file) {
+  try {
+    return defaultShowFile(ref, file);
+  } catch {
+    return "";
+  }
 }
 
 function defaultShowFile(ref, file) {
@@ -211,7 +219,9 @@ function main() {
   let result;
   try {
     const workspaces = expandGlobs(globs, process.cwd()).map((dir) => loadWorkspace(dir, baseRef));
-    const baseBaselineDirs = baseRef ? listBaseBaselineDirs(baseRef, globs) : [];
+    // Base-branch globs too, so dropping a glob cannot hide a deleted baseline.
+    const baseGlobs = baseRef ? parseWorkspaceGlobs(readBaseFile(baseRef, WORKSPACE_FILE)) : [];
+    const baseBaselineDirs = baseRef ? listBaseBaselineDirs(baseRef, [...globs, ...baseGlobs]) : [];
     const removed = readJsonFile(REMOVED_FILE)?.removed ?? [];
     result = evaluateWorkspaces({ workspaces, baseBaselineDirs, removed });
   } catch (error) {
