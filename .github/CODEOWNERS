@@ -10,7 +10,9 @@
 
 /packages/auth-guard/ @acme-org/security-reviewers
 /packages/audit-log/ @acme-org/security-reviewers
+# /.github/ also covers .github/removed-workspaces.json (sanctioned baseline
+# removals). Per-package test-baseline.json files follow their package's owner.
 /.github/ @acme-org/security-reviewers
-/scripts/check-test-baseline.mjs @acme-org/security-reviewers
+/scripts/check-test-baselines.mjs @acme-org/security-reviewers
 **/auth/** @acme-org/security-reviewers
 **/crypto/** @acme-org/security-reviewers

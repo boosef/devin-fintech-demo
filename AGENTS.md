@@ -14,12 +14,17 @@ step-by-step procedures.
 
 - Never delete, skip (`it.skip`, `describe.skip`, `it.todo`) or weaken a test to
   make CI pass. Fix the code, or stop and explain the problem in the PR.
-- The baseline is a ratchet: `minPassedTests` in `.github/test-baseline.json`
-  must equal the number of passing tests exactly, and may only go up. If your
-  PR adds tests, raise it in the same PR to the new passing count — leaving it
-  stale fails the build, exactly like deleting a test does.
-- Never lower `minPassedTests`, and never set it below the value on the PR's
-  base branch; CI checks both.
+- Every package with tests has its own ratchet: `minPassedTests` in
+  `<package>/test-baseline.json` must equal that package's passing test count
+  exactly, and may only go up. If your PR adds tests to a package, raise that
+  package's baseline in the same PR — leaving it stale fails the build, exactly
+  like deleting a test does. Do not edit other packages' baselines.
+- Never lower `minPassedTests`, never set it below the value on the PR's base
+  branch, and never delete a baseline; CI checks all three. Removing a whole
+  workspace requires listing it in `.github/removed-workspaces.json`.
+- Teams own their package's baseline. Security reviewers own the checker
+  (`scripts/check-test-baselines.mjs`), `.github/removed-workspaces.json` and
+  the `packages/*` baselines.
 - Skipped and todo tests fail the build by design: a skipped test is a removed
   test.
 
@@ -59,5 +64,6 @@ All three must pass with zero errors. Each runs through Turborepo
 (`turbo run <task>`) across every workspace package, so a new package or app
 is only checked once its `package.json` defines `lint`, `typecheck` and `test`
 scripts (and `build` if it has one). That wiring is manual; see PLAYBOOK.md
-section 6. `pnpm test` does not run the `scripts/` tests; run `pnpm test:ci`
-for the full count that the baseline guard checks.
+section 6. `pnpm test` runs each package's tests and writes its
+`test-results.json`; `pnpm test:ci` also runs the `scripts/` tests and the
+per-package baseline guard.
