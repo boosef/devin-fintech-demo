@@ -2,6 +2,7 @@
 // Scaffolds team-apps/<name>/ from scripts/create-team-app/templates/, wired
 // into lint, typecheck, test and the per-package baseline guard.
 // Usage: pnpm create-team-app <name>
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,6 +14,19 @@ export const NAME_PATTERN = /^[a-z][a-z0-9-]*$/;
 
 export function packageName(name) {
   return `@acme/team-${name}`;
+}
+
+/** True if git would ignore team-apps/<name>, so the app could never be committed. */
+function isGitIgnored(name) {
+  try {
+    execFileSync("git", ["check-ignore", "-q", `team-apps/${name}/package.json`], {
+      cwd: REPO_ROOT,
+      stdio: "ignore",
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function copyTemplates(fromDir, toDir, vars) {
@@ -36,6 +50,11 @@ function copyTemplates(fromDir, toDir, vars) {
 export function createTeamApp(name, targetDir = join(REPO_ROOT, "team-apps", name)) {
   if (!NAME_PATTERN.test(name)) {
     throw new Error(`invalid name "${name}": use lowercase letters, digits and dashes, starting with a letter`);
+  }
+  if (isGitIgnored(name)) {
+    throw new Error(
+      `invalid name "${name}": team-apps/${name} is ignored by .gitignore, so it could not be committed`,
+    );
   }
   if (existsSync(targetDir)) {
     throw new Error(`${relative(REPO_ROOT, targetDir)} already exists`);

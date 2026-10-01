@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join, relative } from "node:path";
 
@@ -66,4 +66,15 @@ describe("create-team-app", () => {
       rmSync(root, { recursive: true, force: true });
     }
   }, 60_000);
+
+  it("rejects a name whose team-apps/<name> directory git ignores", () => {
+    const root = mkdtempSync(join(tmpdir(), "create-team-app-"));
+    try {
+      const target = join(root, "team-apps", "coverage");
+      expect(() => createTeamApp("coverage", target)).toThrow("ignored by .gitignore");
+      expect(existsSync(target)).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });
