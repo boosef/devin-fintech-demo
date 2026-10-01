@@ -10,7 +10,19 @@
   ],
   "tasks": {
     "//#lint:root": {
-      "inputs": ["scripts/**", "team-apps/**", "*.mjs", "*.ts"]
+      "inputs": [
+        "scripts/**",
+        "team-apps/**",
+        "*.mjs",
+        "*.ts",
+        "!**/node_modules/**",
+        "!**/.turbo/**",
+        "!**/test-results.json"
+      ]
+    },
+    "//#test:scripts": {
+      "inputs": ["scripts/**", "!scripts/test-results.json"],
+      "outputs": ["scripts/test-results.json"]
     },
     "lint": {
       "dependsOn": ["//#lint:root"]
@@ -19,7 +31,7 @@
       "dependsOn": ["^typecheck"]
     },
     "test": {
-      "dependsOn": ["^typecheck"],
+      "dependsOn": ["^typecheck", "//#test:scripts"],
       "outputs": ["coverage/**", "test-results.json"]
     },
     "build": {

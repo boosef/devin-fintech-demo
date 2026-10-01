@@ -1,6 +1,9 @@
 name: quality-gate
 
-on: pull_request
+on:
+  pull_request:
+  push:
+    branches: [main]
 
 permissions:
   contents: read
@@ -16,6 +19,7 @@ jobs:
           fetch-depth: 0
 
       - name: Fetch base branch
+        if: github.event_name == 'pull_request'
         run: git fetch --no-tags origin "$BASE_BRANCH:refs/remotes/origin/$BASE_BRANCH" || true
         env:
           BASE_BRANCH: ${{ github.base_ref }}
@@ -34,21 +38,29 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Cache Turborepo
-        uses: actions/cache@v4
+      # Only trusted main runs write the cache (see the save step); PRs only read it.
+      - name: Restore Turborepo cache
+        uses: actions/cache/restore@v4
         with:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
           restore-keys: |
             turbo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+            turbo-${{ runner.os }}-
 
       - name: Lint, typecheck, test and build
         run: pnpm turbo run lint typecheck test build
 
-      - name: Test
-        run: pnpm test:ci
-
       - name: Test-count baseline guard
         run: node scripts/check-test-baselines.mjs
         env:
-          BASE_REF: origin/${{ github.base_ref }}
+          # PRs compare against the base branch, pushes against the previous tip
+          # (none on a branch's first push, which then gets the local semantics).
+          BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || (github.event.before != '0000000000000000000000000000000000000000' && github.event.before || '') }}
+
+      - name: Save Turborepo cache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}

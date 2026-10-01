@@ -75,8 +75,10 @@ database](apps/refunds-dashboard/README.md#setup), then run
 `pnpm test:ci` (all tests + per-package baseline guard),
 `pnpm --filter @acme/audit-log test` (single package). `pnpm test` runs each
 workspace package's suite through Turborepo, writing `<package>/test-results.json`;
-`pnpm test:ci` also runs the CI helper tests in `scripts/` (not a workspace
-package) and checks every package against its own `test-baseline.json`.
+it also runs the CI helper tests in `scripts/` (not a workspace package) as
+the cached root task `//#test:scripts` (`pnpm test:scripts` runs them alone).
+`pnpm test:ci` runs `turbo run test`, then checks every package against its own
+`test-baseline.json`.
 Coverage is not collected in CI; `pnpm vitest run --coverage` reports it
 locally for `packages/*` only. New team apps are wired up by hand; see the
 [playbook](PLAYBOOK.md#6-building-or-migrating-a-team-app).
@@ -94,10 +96,22 @@ typecheck, test and build), and the `globalDependencies`: `tsconfig.base.json`,
 `.github/workflows/**`. Changing any of those invalidates every task. Root
 files (`scripts/`, root configs) and all of `team-apps/` are linted by the
 `//#lint:root` task, so the team-app import boundary holds even for a team app
-without a `lint` script. CI
-restores `.turbo/` with `actions/cache` but still runs every task; there is no
-affected-package filtering, so the test-count ratchet always sees the full
-suite. Use `pnpm turbo run <task> --force` to bypass the cache.
+without a `lint` script. Every package's `lint` depends on `//#lint:root` and
+every `test` on `//#test:scripts`, so a change under `scripts/` or `team-apps/`
+reruns all `lint` tasks, and a change under `scripts/` reruns all `test` tasks.
+Use `pnpm turbo run <task> --force` to bypass the cache.
+
+CI runs the whole graph unfiltered on every PR; there is no affected-package
+filtering. Unchanged packages replay their cached logs and their cached
+`test-results.json` (a declared `test` output), while changed packages and
+their dependents rerun, so the baseline guard always sees every package.
+Correctness never depends on the cache: a cold or missing cache reruns
+everything and only costs time. Only trusted runs write the cache: pushes to
+`main` save `.turbo/` with `actions/cache/save` (key: OS + `pnpm-lock.yaml` hash
++ commit SHA), and PRs only restore it (falling back to the newest `main` entry
+for the same lockfile, then any lockfile). A nightly `nightly-full` workflow
+reruns everything on `main` with `--force` as a safety net against a bad cache
+entry or an undeclared input.
 
 ## Decisions
 
@@ -114,9 +128,10 @@ suite. Use `pnpm turbo run <task> --force` to bypass the cache.
 
 ## Quality gate
 
-Every PR (against any branch) runs `pnpm turbo run lint typecheck test build`
-across all workspace packages, then `pnpm test:ci` and a **per-package
-test-count ratchet**. It fails if a package's passing-test count does not
+Every PR (against any branch) and every push to `main` runs one
+`pnpm turbo run lint typecheck test build` across all workspace packages
+(cached; see [Build caching](#build-caching)), then a **per-package
+test-count ratchet**. The same runs nightly on `main` with the cache bypassed. It fails if a package's passing-test count does not
 exactly match `minPassedTests` in its own `test-baseline.json`, if that value
 is below the one on the base branch, if a package with tests has no baseline
 or a baseline is deleted, or if any test is skipped, todo or failing. Teams

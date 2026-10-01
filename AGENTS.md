@@ -64,6 +64,13 @@ All three must pass with zero errors. Each runs through Turborepo
 (`turbo run <task>`) across every workspace package, so a new package or app
 is only checked once its `package.json` defines `lint`, `typecheck` and `test`
 scripts (and `build` if it has one). That wiring is manual; see PLAYBOOK.md
-section 6. `pnpm test` runs each package's tests and writes its
-`test-results.json`; `pnpm test:ci` also runs the `scripts/` tests and the
-per-package baseline guard.
+section 6. `pnpm test` runs each package's tests and the `scripts/` tests
+(`//#test:scripts`) and writes each one's `test-results.json`; `pnpm test:ci`
+then runs the per-package baseline guard.
+
+CI runs the full turbo graph on every PR with no affected-package filtering:
+unchanged packages replay cached results (including `test-results.json`), and
+the guard always checks every package. PRs only read the cache; pushes to
+`main` write it, and the `nightly-full` workflow reruns everything on `main`
+with `--force`. Never make a CI check depend on a cache hit, and never add a
+`--filter` to the CI turbo run.
