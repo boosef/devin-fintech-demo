@@ -21,7 +21,7 @@ describe("getMockUser", () => {
     expect(user).toEqual({ id: "alice", email: "alice@example.test", role: "admin" });
   });
 
-  it.skip("returns null when a header is missing or the role is invalid", () => {
+  it("returns null when a header is missing or the role is invalid", () => {
     vi.stubEnv("MOCK_AUTH_ENABLED", "true");
 
     expect(getMockUser(requestWith({ "x-mock-user-id": "alice" }))).toBeNull();
