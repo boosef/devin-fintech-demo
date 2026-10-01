@@ -1,0 +1,30 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "globalDependencies": [
+    "tsconfig.base.json",
+    "eslint.config.mjs",
+    "vitest.config.ts",
+    "pnpm-lock.yaml",
+    ".nvmrc",
+    ".github/workflows/**"
+  ],
+  "tasks": {
+    "//#lint:root": {
+      "inputs": ["scripts/**", "team-apps/**", "*.mjs", "*.ts"]
+    },
+    "lint": {
+      "dependsOn": ["//#lint:root"]
+    },
+    "typecheck": {
+      "dependsOn": ["^typecheck"]
+    },
+    "test": {
+      "dependsOn": ["^typecheck"],
+      "outputs": ["coverage/**", "test-results.json"]
+    },
+    "build": {
+      "dependsOn": ["^typecheck", "^build", "typecheck"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+    }
+  }
+}

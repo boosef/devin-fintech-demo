@@ -20,6 +20,8 @@ How to build on the shared platform layer in this monorepo.
        "@acme/auth-guard": "workspace:*"
      },
      "scripts": {
+       "lint": "eslint .",
+       "typecheck": "tsc --noEmit",
        "test": "vitest run"
      }
    }
@@ -35,14 +37,12 @@ How to build on the shared platform layer in this monorepo.
    };
    ```
 
-4. Add an app `tsconfig.json` that extends `tsconfig.base.json`, then add
-   `tsc -p apps/<name>/tsconfig.json --noEmit` to the root `typecheck` script
-   in `package.json`. The root script names
-   `apps/refunds-dashboard/tsconfig.json` explicitly; new apps are **not**
-   typechecked automatically. Add a `vitest.config.ts` in the app — the root
-   `test.projects` glob for `apps/*/vitest.config.ts` picks up its tests, so
-   they count towards the quality gate. If the new app has a build, add it to
-   the CI workflow as well; CI currently builds the refunds dashboard only.
+4. Add an app `tsconfig.json` that extends `../../tsconfig.base.json` and the
+   `lint`, `typecheck` and `test` scripts above (plus `build` if the app has
+   one). The root scripts and CI run `turbo run <task>`, which only checks
+   packages that define the script. Add a `vitest.config.ts` in the app — the
+   root `test.projects` glob for `apps/*/vitest.config.ts` picks up its tests
+   for `pnpm test:ci`, so they count towards the quality gate.
 5. Non-negotiable rules: **every state-changing action is audited** through
    `@acme/audit-log`, and **every route is role-checked** through
    `@acme/auth-guard`. No app-local audit tables and no app-local header
@@ -167,11 +167,15 @@ Notes:
 filter, so it also runs on PRs targeting feature branches):
 
 1. `pnpm install --frozen-lockfile` — the lockfile must be committed and current.
-2. `pnpm lint` — ESLint flat config; any error fails the build.
-3. `pnpm typecheck` — `tsc --noEmit` with `strict: true`; any error fails.
-4. `pnpm --filter @acme/refunds-dashboard build` — build the Next.js app.
-5. `pnpm test:ci` — Vitest with v8 coverage, writing `test-results.json`.
-6. **Test-count baseline guard** — `node scripts/check-test-baseline.mjs`.
+2. `pnpm turbo run lint typecheck test build` — every workspace package's
+   `lint` (ESLint flat config), `typecheck` (`tsc --noEmit`, `strict: true`),
+   `test` and `build` scripts, plus `//#lint:root` for `scripts/`, `team-apps/` and
+   root configs. All tasks run on every PR (no affected filtering); `.turbo/` is
+   restored from `actions/cache` so unchanged packages replay cached results.
+3. `pnpm test:ci` — the root Vitest run (all `test.projects`, including
+   `scripts`) with v8 coverage, writing `test-results.json`. It is not routed
+   through Turborepo.
+4. **Test-count baseline guard** — `node scripts/check-test-baseline.mjs`.
 
 The test count includes the app's and CI helper's tests, but the coverage
 configuration measures only `packages/*/src/**/*.ts`; app and script coverage
@@ -222,6 +226,9 @@ The guard's own logic is unit-tested in `scripts/tests/`, which runs as the
 - **Agent identity layer**: agents do not get their own scoped, revocable
   credentials; `actorType` and `onBehalfOf` are recorded as claims but are not
   verified.
+- **Workspace generator**: nothing scaffolds a new app or team app yet, so
+  its `tsconfig.json`, `lint`/`typecheck`/`test`/`build` scripts and root
+  `vitest.config.ts` project entry are added by hand (sections 1 and 6).
 - **Guardrail/quality-gate depth**: no risk scoring or auto-merge tiers, no
   write-scope enforcement on agent PRs, no SAST or dependency scanning, no
   secret scanning beyond GitHub defaults.
@@ -265,15 +272,16 @@ team request or a legacy-tool migration:
    note bodies and other sensitive payloads out of audit before/after fields.
    Use `@acme/auth-guard` for access checks on team-owned routes and data;
    the core API still checks roles independently.
-5. **Wire up the quality gate.** Add an app `tsconfig.json` and include it in
-   the root `typecheck` script (which currently names only the refunds app).
-   Add an app `vitest.config.ts` and its path/glob to the root
-   `vitest.config.ts` `test.projects` (which currently has no team-app entry).
-   Add any required app build to CI with the appropriate owner review: CI
-   currently builds only the refunds dashboard. `pnpm lint` scans the new
-   directory and rejects imports from `apps/**`, but cannot detect runtime
-   paths to a core DB — review those separately. The coverage report still
-   measures only `packages/*`.
+5. **Wire up the quality gate.** This is manual until a workspace generator
+   lands. Add an app `tsconfig.json` extending `../../tsconfig.base.json` and
+   `"lint": "eslint ."`, `"typecheck": "tsc --noEmit"`, `"test": "vitest run"`
+   (and `build`, if any) to its `package.json`; Turborepo then runs them in
+   `pnpm lint`/`typecheck`/`test` and CI. Add an app `vitest.config.ts` and its
+   path/glob to the root `vitest.config.ts` `test.projects` (which currently
+   has no team-app entry) so `pnpm test:ci` and the baseline count its tests.
+   `pnpm lint` rejects imports from `apps/**` in the new directory, but cannot
+   detect runtime paths to a core DB — review those separately. The coverage
+   report still measures only `packages/*`.
 6. **Test the contract and the migration.** Check authorized and no-role
    requests, `assignedTo=me`, error propagation (including core `403` and
    repeated-decision `409`), core audit records for core changes, and local

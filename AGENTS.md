@@ -55,4 +55,9 @@ Run, from the repo root:
 pnpm lint && pnpm typecheck && pnpm test
 ```
 
-All three must pass with zero errors.
+All three must pass with zero errors. Each runs through Turborepo
+(`turbo run <task>`) across every workspace package, so a new package or app
+is only checked once its `package.json` defines `lint`, `typecheck` and `test`
+scripts (and `build` if it has one). That wiring is manual; see PLAYBOOK.md
+section 6. `pnpm test` does not run the `scripts/` tests; run `pnpm test:ci`
+for the full count that the baseline guard checks.
