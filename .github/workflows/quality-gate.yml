@@ -34,14 +34,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Lint
-        run: pnpm lint
+      - name: Cache Turborepo
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
 
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Build refunds dashboard
-        run: pnpm --filter @acme/refunds-dashboard build
+      - name: Lint, typecheck, test and build
+        run: pnpm turbo run lint typecheck test build
 
       - name: Test
         run: pnpm test:ci

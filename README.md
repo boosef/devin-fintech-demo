@@ -73,16 +73,36 @@ To run the app, [set its encryption key and seed the local
 database](apps/refunds-dashboard/README.md#setup), then run
 `pnpm --filter @acme/refunds-dashboard dev`. Useful scripts:
 `pnpm test:ci` (coverage + `test-results.json`),
-`pnpm --filter @acme/audit-log test` (single package). The test suite includes
-the dashboard and CI helper tests, but **coverage measures only `packages/*`**,
-not the app or scripts. New team-app tests and typechecking need explicit root
-configuration; see the [playbook](PLAYBOOK.md#6-building-or-migrating-a-team-app).
+`pnpm --filter @acme/audit-log test` (single package). `pnpm test` runs each
+workspace package's suite through Turborepo; the CI helper tests in `scripts/`
+(not a workspace package) run only in the root `pnpm test:ci` run, which is
+also the run the baseline counts. **Coverage measures only `packages/*`**, not
+the app or scripts. New team apps are wired up by hand; see the
+[playbook](PLAYBOOK.md#6-building-or-migrating-a-team-app).
+
+## Build caching
+
+`pnpm lint`, `pnpm typecheck` and `pnpm test` run `turbo run <task>`, which
+runs each workspace package's script of the same name and caches the result
+in `.turbo/` (gitignored). Rerunning with unchanged inputs replays the cached
+logs (`FULL TURBO`). A package's hash covers its own tracked files, the hashes
+of the dependency tasks in `turbo.json` (`test`, `build` and `typecheck` depend
+on `^typecheck`, so editing `packages/audit-log` reruns the dashboard's
+typecheck, test and build), and the `globalDependencies`: `tsconfig.base.json`,
+`eslint.config.mjs`, `vitest.config.ts`, `pnpm-lock.yaml`, `.nvmrc` and
+`.github/workflows/**`. Changing any of those invalidates every task. Root
+files (`scripts/`, root configs) and all of `team-apps/` are linted by the
+`//#lint:root` task, so the team-app import boundary holds even for a team app
+without a `lint` script. CI
+restores `.turbo/` with `actions/cache` but still runs every task; there is no
+affected-package filtering, so the test-count ratchet always sees the full
+suite. Use `pnpm turbo run <task> --force` to bypass the cache.
 
 ## Decisions
 
-- **pnpm workspaces, not Turborepo.** The POC has ~2-4 packages, and
-  Turborepo's build-caching value only shows up at higher package counts.
-  *Revisit if we exceed ~10 packages.*
+- **pnpm workspaces with Turborepo for task caching.** Turborepo only
+  orchestrates and caches `lint`, `typecheck`, `test` and `build`; pnpm still
+  owns installs and workspace linking. See [Build caching](#build-caching).
 - **No build step for shared packages.** Each package's `exports` and `types`
   point at `./src/index.ts`; apps depend on them with `"workspace:*"`. A Next.js
   app must therefore list `@acme/audit-log` and `@acme/auth-guard` in
@@ -93,8 +113,9 @@ configuration; see the [playbook](PLAYBOOK.md#6-building-or-migrating-a-team-app
 
 ## Quality gate
 
-Every PR (against any branch) runs lint, typecheck, the dashboard build, tests,
-and a **test-count baseline ratchet**. The ratchet fails if the passing-test
+Every PR (against any branch) runs `pnpm turbo run lint typecheck test build`
+across all workspace packages, then the root `pnpm test:ci` run and a
+**test-count baseline ratchet**. The ratchet fails if the passing-test
 count does not exactly match `minPassedTests` in `.github/test-baseline.json`,
 if that value is below the one on the base branch, or if any test is skipped,
 todo or failing. See [PLAYBOOK.md](PLAYBOOK.md#4-what-the-quality-gate-checks-and-how-to-update-the-test-baseline)
