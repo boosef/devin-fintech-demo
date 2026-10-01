@@ -40,15 +40,16 @@ How to build on the shared platform layer in this monorepo.
 4. Add an app `tsconfig.json` that extends `../../tsconfig.base.json` and the
    `lint`, `typecheck` and `test` scripts above (plus `build` if the app has
    one). The root scripts and CI run `turbo run <task>`, which only checks
-   packages that define the script. Add a `vitest.config.ts` in the app — the
-   root `test.projects` glob for `apps/*/vitest.config.ts` picks up its tests
-   for `pnpm test:ci`, so they count towards the quality gate.
+   packages that define the script. Add a `vitest.config.ts` in the app, make
+   its `test` script write `test-results.json` (section 4) and commit its
+   `test-baseline.json` so its tests count towards the quality gate.
 5. Non-negotiable rules: **every state-changing action is audited** through
    `@acme/audit-log`, and **every route is role-checked** through
    `@acme/auth-guard`. No app-local audit tables and no app-local header
    parsing.
 6. Run `pnpm install`, then `pnpm lint && pnpm typecheck && pnpm test` before
-   opening a PR, and raise `minPassedTests` (section 4) for the tests you added.
+   opening a PR, and raise the app's `minPassedTests` (section 4) for the tests
+   you added.
 
 ### Publishing a new core API
 
@@ -172,45 +173,55 @@ filter, so it also runs on PRs targeting feature branches):
    `test` and `build` scripts, plus `//#lint:root` for `scripts/`, `team-apps/` and
    root configs. All tasks run on every PR (no affected filtering); `.turbo/` is
    restored from `actions/cache` so unchanged packages replay cached results.
-3. `pnpm test:ci` — the root Vitest run (all `test.projects`, including
-   `scripts`) with v8 coverage, writing `test-results.json`. It is not routed
-   through Turborepo.
-4. **Test-count baseline guard** — `node scripts/check-test-baseline.mjs`.
+3. `pnpm test:ci` — `turbo run test` (cached; each package's `test` script is
+   `vitest run --reporter=default --reporter=json --outputFile=test-results.json`),
+   then the `scripts` Vitest project (not a workspace package) writing
+   `scripts/test-results.json`, then the baseline guard with no base-branch floor.
+4. **Test-count baseline guard** — `node scripts/check-test-baselines.mjs` again,
+   with `BASE_REF` set so the base-branch rules apply.
 
-The test count includes the app's and CI helper's tests, but the coverage
-configuration measures only `packages/*/src/**/*.ts`; app and script coverage
-is not measured in this POC.
+Coverage is not collected in CI; `pnpm vitest run --coverage` reports it for
+`packages/*/src/**/*.ts` locally.
 
-The guard reads `test-results.json` and `.github/test-baseline.json`
-(`{ "minPassedTests": N }`) and is a **ratchet**: the baseline must equal the
-passing count exactly, and may only ever go up. It fails if:
+The guard checks every workspace dir from the `pnpm-workspace.yaml` globs plus
+`scripts`, skipping dirs with no `test` script and no `*.test.*` / `*.spec.*` files. Each
+remaining dir needs a `test-baseline.json` (`{ "minPassedTests": N }`) next to
+its `test-results.json`, and each baseline is its own **ratchet**: it must equal
+that package's passing count exactly, and may only ever go up. Failures name the
+package path. It fails if:
 
 - `numPassedTests > minPassedTests` — you added tests but left the baseline
   stale, so a later PR could delete them and still pass. Message:
-  `Passed N tests but baseline is M. Raise minPassedTests to N in
-  .github/test-baseline.json in this PR.`;
+  `<dir>: Passed N tests but baseline is M. Raise minPassedTests to N in
+  <dir>/test-baseline.json in this PR.`;
 - `numPassedTests < minPassedTests` — tests were deleted, or stopped passing;
 - `minPassedTests` is lower than the value on the PR's base branch (read in CI
-  with `git show origin/$GITHUB_BASE_REF:.github/test-baseline.json`; a baseline
+  with `git show origin/$GITHUB_BASE_REF:<dir>/test-baseline.json`; a baseline
   that does not exist there yet counts as `0`) — the ratchet was filed down;
 - `numPendingTests > 0` or `numTodoTests > 0` — a skipped or todo test counts as
-  a removed test, which is why skipping fails the build; or
-- `numFailedTests > 0`.
+  a removed test, which is why skipping fails the build;
+- `numFailedTests > 0`;
+- a package has tests but no `test-baseline.json`; or
+- a baseline that exists on the base branch was deleted (with or without its
+  package dir) and the package is not listed in `.github/removed-workspaces.json`
+  (`{ "removed": ["team-apps/x"] }`).
 
 It exists to stop the failure mode where a failing test is "fixed" by deleting
 or skipping it instead of fixing the bug — and, with the exact-match and
 base-branch rules, to stop the baseline going stale so that deletion becomes
 invisible later.
 
-**Raising the baseline:** any PR that adds tests must run `pnpm test:ci`
-locally, read the new passing count, and set `minPassedTests` to that exact
-number in `.github/test-baseline.json` **in the same PR** — this is not
-optional, the build fails without it. Never lower it. `.github/**` is
-code-owned, so any change to the baseline requires review from the security
-reviewers team.
+**Raising the baseline:** any PR that adds tests to a package must run
+`pnpm test:ci` locally and set that package's `minPassedTests` to the exact
+passing count the guard reports **in the same PR** — this is not optional, the
+build fails without it. Edit only the baselines of packages you changed; never
+lower one. Baselines are reviewed by their package's owners: teams own
+`team-apps/*`, the platform team owns `apps/*`, and the security reviewers own
+the `packages/*` baselines, the checker and `.github/removed-workspaces.json`
+(removing a workspace's baseline needs security review).
 
 The guard's own logic is unit-tested in `scripts/tests/`, which runs as the
-`scripts` Vitest project and counts towards the same baseline.
+`scripts` Vitest project with its own `scripts/test-baseline.json`.
 
 ## 5. What's explicitly out of scope for this POC
 
@@ -227,8 +238,8 @@ The guard's own logic is unit-tested in `scripts/tests/`, which runs as the
   credentials; `actorType` and `onBehalfOf` are recorded as claims but are not
   verified.
 - **Workspace generator**: nothing scaffolds a new app or team app yet, so
-  its `tsconfig.json`, `lint`/`typecheck`/`test`/`build` scripts and root
-  `vitest.config.ts` project entry are added by hand (sections 1 and 6).
+  its `tsconfig.json`, `lint`/`typecheck`/`test`/`build` scripts and
+  `test-baseline.json` are added by hand (sections 1 and 6).
 - **Guardrail/quality-gate depth**: no risk scoring or auto-merge tiers, no
   write-scope enforcement on agent PRs, no SAST or dependency scanning, no
   secret scanning beyond GitHub defaults.
@@ -274,11 +285,11 @@ team request or a legacy-tool migration:
    the core API still checks roles independently.
 5. **Wire up the quality gate.** This is manual until a workspace generator
    lands. Add an app `tsconfig.json` extending `../../tsconfig.base.json` and
-   `"lint": "eslint ."`, `"typecheck": "tsc --noEmit"`, `"test": "vitest run"`
+   `"lint": "eslint ."`, `"typecheck": "tsc --noEmit"`,
+   `"test": "vitest run --reporter=default --reporter=json --outputFile=test-results.json"`
    (and `build`, if any) to its `package.json`; Turborepo then runs them in
-   `pnpm lint`/`typecheck`/`test` and CI. Add an app `vitest.config.ts` and its
-   path/glob to the root `vitest.config.ts` `test.projects` (which currently
-   has no team-app entry) so `pnpm test:ci` and the baseline count its tests.
+   `pnpm lint`/`typecheck`/`test` and CI. Add an app `vitest.config.ts` and
+   `team-apps/<name>/test-baseline.json` — your team owns that file.
    `pnpm lint` rejects imports from `apps/**` in the new directory, but cannot
    detect runtime paths to a core DB — review those separately. The coverage
    report still measures only `packages/*`.
@@ -289,8 +300,8 @@ team request or a legacy-tool migration:
    screen/flow and known defect in `team-apps/<name>/MIGRATION.md`; add a
    regression test for each defect. Do not commit legacy tokens or data.
 7. **Review and submit.** Run `pnpm install` to update the lockfile, then
-   `pnpm lint && pnpm typecheck && pnpm test`. Run `pnpm test:ci` and raise
-   `.github/test-baseline.json` to the exact passing count (section 4).
+   `pnpm lint && pnpm typecheck && pnpm test`. Run `pnpm test:ci` and set
+   `team-apps/<name>/test-baseline.json` to the exact passing count (section 4).
    Confirm the team-app PR does not change `apps/` or `packages/`; if a core
    API change is required, make it a separate platform-owned PR. `team-apps/`
    has no blanket CODEOWNER; `/apps/` requires platform review and `.github/`

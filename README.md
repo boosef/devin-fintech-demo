@@ -19,7 +19,7 @@ packages/auth-guard      @acme/auth-guard         mock role-based access checks
 apps/refunds-dashboard   @acme/refunds-dashboard  refunds review UI and API
 team-apps/*              configured workspace for team-owned tools
 scripts/                 CI helper scripts
-.github/                 quality-gate workflow, CODEOWNERS, test baseline
+.github/                 quality-gate workflow, CODEOWNERS, removed-workspaces.json
 ```
 
 ## Build a team tool or add a core use case
@@ -72,12 +72,13 @@ pnpm lint && pnpm typecheck && pnpm test
 To run the app, [set its encryption key and seed the local
 database](apps/refunds-dashboard/README.md#setup), then run
 `pnpm --filter @acme/refunds-dashboard dev`. Useful scripts:
-`pnpm test:ci` (coverage + `test-results.json`),
+`pnpm test:ci` (all tests + per-package baseline guard),
 `pnpm --filter @acme/audit-log test` (single package). `pnpm test` runs each
-workspace package's suite through Turborepo; the CI helper tests in `scripts/`
-(not a workspace package) run only in the root `pnpm test:ci` run, which is
-also the run the baseline counts. **Coverage measures only `packages/*`**, not
-the app or scripts. New team apps are wired up by hand; see the
+workspace package's suite through Turborepo, writing `<package>/test-results.json`;
+`pnpm test:ci` also runs the CI helper tests in `scripts/` (not a workspace
+package) and checks every package against its own `test-baseline.json`.
+Coverage is not collected in CI; `pnpm vitest run --coverage` reports it
+locally for `packages/*` only. New team apps are wired up by hand; see the
 [playbook](PLAYBOOK.md#6-building-or-migrating-a-team-app).
 
 ## Build caching
@@ -107,18 +108,19 @@ suite. Use `pnpm turbo run <task> --force` to bypass the cache.
   point at `./src/index.ts`; apps depend on them with `"workspace:*"`. A Next.js
   app must therefore list `@acme/audit-log` and `@acme/auth-guard` in
   `transpilePackages` in its `next.config.mjs`. CI builds the refunds dashboard.
-- **TypeScript `strict: true` everywhere**, Vitest with the v8 coverage provider
-  from a single root `vitest.config.ts` (`test.projects`), ESLint flat config
+- **TypeScript `strict: true` everywhere**, Vitest with a `vitest.config.ts` per
+  package (the root one adds the `scripts` project and coverage), ESLint flat config
   (`eslint.config.mjs`) with typescript-eslint `recommended`.
 
 ## Quality gate
 
 Every PR (against any branch) runs `pnpm turbo run lint typecheck test build`
-across all workspace packages, then the root `pnpm test:ci` run and a
-**test-count baseline ratchet**. The ratchet fails if the passing-test
-count does not exactly match `minPassedTests` in `.github/test-baseline.json`,
-if that value is below the one on the base branch, or if any test is skipped,
-todo or failing. See [PLAYBOOK.md](PLAYBOOK.md#4-what-the-quality-gate-checks-and-how-to-update-the-test-baseline)
+across all workspace packages, then `pnpm test:ci` and a **per-package
+test-count ratchet**. It fails if a package's passing-test count does not
+exactly match `minPassedTests` in its own `test-baseline.json`, if that value
+is below the one on the base branch, if a package with tests has no baseline
+or a baseline is deleted, or if any test is skipped, todo or failing. Teams
+raise their own package's baseline in the PR that adds the tests. See [PLAYBOOK.md](PLAYBOOK.md#4-what-the-quality-gate-checks-and-how-to-update-the-test-baseline)
 and [AGENTS.md](AGENTS.md).
 
 ## Manual repository admin steps
