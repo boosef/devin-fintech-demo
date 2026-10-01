@@ -31,6 +31,13 @@ describe("crypto", () => {
     expect(Number.isInteger(amount)).toBe(true);
   });
 
+  it("uses a fresh IV so the same value encrypts differently each time", () => {
+    const first = encrypt("cust_demo_0001", TEST_KEY);
+    const second = encrypt("cust_demo_0001", TEST_KEY);
+    expect(first).not.toBe(second);
+    expect(first).toMatch(/^v1:[A-Za-z0-9+/=]+:[A-Za-z0-9+/=]+:[A-Za-z0-9+/=]+$/);
+  });
+
   it("rejects tampered ciphertext or auth tag", () => {
     const [version, iv, tag, ciphertext] = encrypt("cust_demo_0001", TEST_KEY).split(":") as [string, string, string, string];
     expect(() => decrypt([version, iv, tag, tamper(ciphertext)].join(":"), TEST_KEY)).toThrow();
