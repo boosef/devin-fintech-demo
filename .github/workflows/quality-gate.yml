@@ -54,7 +54,9 @@ jobs:
       - name: Test-count baseline guard
         run: node scripts/check-test-baselines.mjs
         env:
-          BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+          # PRs compare against the base branch, pushes against the previous tip
+          # (none on a branch's first push, which then gets the local semantics).
+          BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || (github.event.before != '0000000000000000000000000000000000000000' && github.event.before || '') }}
 
       - name: Save Turborepo cache
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
