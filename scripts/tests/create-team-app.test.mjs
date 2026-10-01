@@ -1,67 +1,69 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { delimiter, join, relative } from "node:path";
 
+import { ESLint } from "eslint";
 import { describe, expect, it } from "vitest";
 
 import { REPO_ROOT, createTeamApp } from "../create-team-app.mjs";
 
-const bin = (name) => join(REPO_ROOT, "node_modules", ".bin", name);
+const NAME = "smoke";
 
-function run(command, args, cwd = REPO_ROOT) {
-  const env = { ...process.env, NO_COLOR: "1" };
+/**
+ * Builds a repo-shaped sandbox outside the repo: root configs and node_modules
+ * linked from the repo, the generated app at team-apps/<name>, and its
+ * workspace deps linked the way `pnpm install` would.
+ */
+function generateInSandbox() {
+  const root = mkdtempSync(join(tmpdir(), "create-team-app-"));
+  for (const file of ["node_modules", "tsconfig.base.json", "eslint.config.mjs"]) {
+    symlinkSync(join(REPO_ROOT, file), join(root, file));
+  }
+  const appDir = createTeamApp(NAME, join(root, "team-apps", NAME));
+  mkdirSync(join(appDir, "node_modules", "@acme"), { recursive: true });
+  for (const pkg of ["audit-log", "auth-guard"]) {
+    symlinkSync(join(REPO_ROOT, "packages", pkg), join(appDir, "node_modules", "@acme", pkg));
+  }
+  return { root, appDir };
+}
+
+function runScript(appDir, script) {
+  const command = JSON.parse(readFileSync(join(appDir, "package.json"), "utf8")).scripts[script];
+  const env = { ...process.env, NO_COLOR: "1", PATH: `${join(REPO_ROOT, "node_modules", ".bin")}${delimiter}${process.env.PATH}` };
   delete env.FORCE_COLOR;
-  const result = spawnSync(bin(command), args, { cwd, encoding: "utf8", env });
+  const result = spawnSync(command, { cwd: appDir, encoding: "utf8", env, shell: true });
   return { status: result.status, output: `${result.stdout}${result.stderr}` };
 }
 
-function isRunning(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** Removes smoke dirs left by killed runs; they would otherwise count as workspaces. */
-function removeStaleSmokeDirs(teamApps) {
-  if (!existsSync(teamApps)) return;
-  for (const entry of readdirSync(teamApps)) {
-    const pid = Number(entry.match(/^\.smoke-(\d+)$/)?.[1]);
-    if (pid && !isRunning(pid)) rmSync(join(teamApps, entry), { recursive: true, force: true });
-  }
-}
-
 describe("create-team-app", () => {
-  it("generates a team app that passes lint, typecheck and test and keeps the apps/** boundary", () => {
-    // Under team-apps/ so the eslint boundary rule and vitest discovery apply.
-    const teamApps = join(REPO_ROOT, "team-apps");
-    const dir = join(teamApps, `.smoke-${process.pid}`);
-    removeStaleSmokeDirs(teamApps);
+  it("generates a team app that passes its lint, typecheck and test scripts and keeps the apps/** boundary", async () => {
+    const { root, appDir } = generateInSandbox();
     try {
-      createTeamApp(`smoke-${process.pid}`, dir);
-      // Stand-in for `pnpm install` linking the workspace dependencies.
-      mkdirSync(join(dir, "node_modules", "@acme"), { recursive: true });
-      for (const pkg of ["audit-log", "auth-guard"]) {
-        symlinkSync(join(REPO_ROOT, "packages", pkg), join(dir, "node_modules", "@acme", pkg));
+      for (const script of ["lint", "typecheck", "test"]) {
+        const { status, output } = runScript(appDir, script);
+        expect(status, `${script}:\n${output}`).toBe(0);
       }
+      expect(JSON.parse(readFileSync(join(appDir, "test-results.json"), "utf8")).numPassedTests).toBe(1);
 
-      expect(run("eslint", [dir])).toMatchObject({ status: 0 });
-      expect(run("tsc", ["-p", dir])).toMatchObject({ status: 0 });
-      const tests = run("vitest", ["run"], dir);
-      expect(tests.status, tests.output).toBe(0);
-      expect(tests.output).toMatch(/Tests\s+1 passed/);
+      // The lint script must really have linted the app under the team-apps/ config.
+      const linted = await new ESLint({ cwd: appDir }).lintFiles(["."]);
+      expect(linted.map((r) => relative(appDir, r.filePath)).sort()).toEqual([
+        "src/index.ts",
+        "tests/example.test.ts",
+        "vitest.config.ts",
+      ]);
 
-      writeFileSync(
-        join(dir, "src", "core-internals.ts"),
-        'export { refundRequests } from "../../../apps/refunds-dashboard/src/db/schema";\n',
-      );
-      const lint = run("eslint", [dir]);
-      expect(lint.status).not.toBe(0);
-      expect(lint.output).toContain("published API");
+      const source = readFileSync(join(appDir, "src", "index.ts"), "utf8");
+      const violating = `import { refundRequests } from "../../../apps/refunds-dashboard/src/db/schema";\n${source}\nexport { refundRequests };\n`;
+      const [result] = await new ESLint({ cwd: REPO_ROOT }).lintText(violating, {
+        filePath: join(REPO_ROOT, "team-apps", NAME, "src", "index.ts"),
+      });
+      const boundary = result?.messages.filter((m) => m.ruleId === "no-restricted-imports" && m.severity === 2) ?? [];
+      expect(boundary).toHaveLength(1);
+      expect(boundary[0]?.message).toContain("published API");
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmSync(root, { recursive: true, force: true });
     }
   }, 60_000);
 });
