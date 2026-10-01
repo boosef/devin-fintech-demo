@@ -66,7 +66,8 @@ pnpm lint && pnpm typecheck && pnpm test
 All three must pass with zero errors. Each runs through Turborepo
 (`turbo run <task>`) across every workspace package, so a new package or app
 is only checked once its `package.json` defines `lint`, `typecheck` and `test`
-scripts (and `build` if it has one). `pnpm create-team-app` adds them for
+scripts (and `build` if it has one; `team-apps/` is also linted by
+`//#lint:root` regardless). `pnpm create-team-app` adds them for
 team apps; core apps are wired by hand (PLAYBOOK.md section 1). `pnpm test` runs each package's tests and the `scripts/` tests
 (`//#test:scripts`) and writes each one's `test-results.json`; `pnpm test:ci`
 then runs the per-package baseline guard.

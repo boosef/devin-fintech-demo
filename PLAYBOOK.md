@@ -22,7 +22,7 @@ How to build on the shared platform layer in this monorepo.
      "scripts": {
        "lint": "eslint .",
        "typecheck": "tsc --noEmit",
-       "test": "vitest run"
+       "test": "vitest run --reporter=default --reporter=json --outputFile=test-results.json"
      }
    }
    ```
@@ -194,7 +194,8 @@ time. Some changes rerun everything (`tsconfig.base.json`, `eslint.config.mjs`,
 `globalDependencies`). A `scripts/` change reruns every `lint` and `test`, and a
 `team-apps/` change reruns every `lint`. A change to one package's files,
 including its `test-baseline.json`, reruns that package and its dependents.
-README-only changes rerun nothing.
+Root-level Markdown (`README.md`, `AGENTS.md`, `PLAYBOOK.md`, `docs/`) is
+not a task input, so changing it reruns nothing.
 
 **Nightly safety net.** `.github/workflows/nightly-full.yml` runs at 03:00 UTC
 (and on manual `workflow_dispatch`) on `main`:
@@ -218,8 +219,9 @@ package path. It fails if:
   <dir>/test-baseline.json in this PR.`;
 - `numPassedTests < minPassedTests` — tests were deleted, or stopped passing;
 - `minPassedTests` is lower than the value on the PR's base branch (read in CI
-  with `git show origin/$GITHUB_BASE_REF:<dir>/test-baseline.json`; a baseline
-  that does not exist there yet counts as `0`) — the ratchet was filed down;
+  with `git show $BASE_REF:<dir>/test-baseline.json`; a baseline that does not
+  exist there yet counts as `0`, and without `BASE_REF`, as locally, the floor
+  is `0`) — the ratchet was filed down;
 - `numPendingTests > 0` or `numTodoTests > 0` — a skipped or todo test counts as
   a removed test, which is why skipping fails the build;
 - `numFailedTests > 0`;

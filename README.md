@@ -10,6 +10,8 @@ is the first published contract. A KYC checker and a feature-flag enabler are
 This is a proof of concept with synthetic data, not a production deployment.
 See [PLAYBOOK.md](PLAYBOOK.md#5-whats-explicitly-out-of-scope-for-this-poc) and
 the [dashboard's production gaps](apps/refunds-dashboard/README.md#out-of-scope).
+Nothing is deployed from this repo; per-app deployment is only proposed, in
+[RFC-001](docs/rfc-001-deployment.md).
 
 ## Layout
 
@@ -18,8 +20,9 @@ packages/audit-log       @acme/audit-log          append-only audit records
 packages/auth-guard      @acme/auth-guard         mock role-based access checks
 apps/refunds-dashboard   @acme/refunds-dashboard  refunds review UI and API
 team-apps/*              configured workspace for team-owned tools
-scripts/                 CI helper scripts
-.github/                 quality-gate workflow, CODEOWNERS, removed-workspaces.json
+scripts/                 CI helper scripts and the create-team-app generator
+docs/                    design documents (RFCs)
+.github/                 quality-gate and nightly-full workflows, CODEOWNERS, removed-workspaces.json
 ```
 
 ## Build a team tool or add a core use case
@@ -142,8 +145,9 @@ and [AGENTS.md](AGENTS.md).
 
 ## Manual repository admin steps
 
-1. Replace the placeholder team `@acme-org/security-reviewers` in
-   `.github/CODEOWNERS` with a real GitHub team that has write access to this
-   repository. Until then GitHub reports an "unknown owner" error for it.
+1. Replace the placeholder teams `@acme-org/security-reviewers` and
+   `@acme-org/platform-team` in `.github/CODEOWNERS` with real GitHub teams
+   that have write access to this repository. Until then GitHub reports an
+   "unknown owner" error for them.
 2. In branch protection for the default branch, turn on **Require review from
    Code Owners** and make the **quality-gate** check **required**.
