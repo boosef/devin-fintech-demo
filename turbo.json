@@ -10,7 +10,15 @@
   ],
   "tasks": {
     "//#lint:root": {
-      "inputs": ["scripts/**", "team-apps/**", "*.mjs", "*.ts"]
+      "inputs": [
+        "scripts/**",
+        "team-apps/**",
+        "*.mjs",
+        "*.ts",
+        "!**/node_modules/**",
+        "!**/.turbo/**",
+        "!**/test-results.json"
+      ]
     },
     "//#test:scripts": {
       "inputs": ["scripts/**", "!scripts/test-results.json"],

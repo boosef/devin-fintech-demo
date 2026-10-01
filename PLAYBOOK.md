@@ -165,20 +165,42 @@ Notes:
 ## 4. What the quality gate checks, and how to update the test baseline
 
 `.github/workflows/quality-gate.yml` runs on every pull request (no branch
-filter, so it also runs on PRs targeting feature branches):
+filter, so it also runs on PRs targeting feature branches) and on every push to
+`main`:
 
 1. `pnpm install --frozen-lockfile` — the lockfile must be committed and current.
 2. `pnpm turbo run lint typecheck test build` — every workspace package's
    `lint` (ESLint flat config), `typecheck` (`tsc --noEmit`, `strict: true`),
    `test` and `build` scripts, plus `//#lint:root` for `scripts/`, `team-apps/` and
-   root configs. All tasks run on every PR (no affected filtering); `.turbo/` is
-   restored from `actions/cache` so unchanged packages replay cached results.
-3. `pnpm test:ci` — `turbo run test` (cached; each package's `test` script is
-   `vitest run --reporter=default --reporter=json --outputFile=test-results.json`),
-   then the `scripts` Vitest project (not a workspace package) writing
-   `scripts/test-results.json`, then the baseline guard with no base-branch floor.
-4. **Test-count baseline guard** — `node scripts/check-test-baselines.mjs` again,
-   with `BASE_REF` set so the base-branch rules apply.
+   root configs, plus `//#test:scripts` (the `scripts` Vitest project, which is
+   not a workspace package, writing `scripts/test-results.json`). Each
+   package's `test` script is
+   `vitest run --reporter=default --reporter=json --outputFile=test-results.json`.
+   All tasks run on every PR with no affected-package filtering. Unchanged
+   packages are cache hits that replay their logs and restore their
+   `test-results.json`; changed packages and everything that depends on them
+   rerun.
+3. **Test-count baseline guard** — `node scripts/check-test-baselines.mjs`,
+   with `BASE_REF` set (`origin/<base branch>` on PRs, the previous `main`
+   commit on pushes) so the base-branch rules apply.
+4. On pushes to `main` only, `.turbo/` is saved with `actions/cache/save`.
+
+**Cache rules.** PRs only restore `.turbo/` (`actions/cache/restore`, keyed on
+OS + `pnpm-lock.yaml` hash, falling back by prefix to the newest `main`
+entry); only `main` writes it, so a PR cannot plant cache entries. Correctness
+never depends on the cache: a cold cache reruns every task and only costs
+time. Some changes rerun everything (`tsconfig.base.json`, `eslint.config.mjs`,
+`vitest.config.ts`, `pnpm-lock.yaml`, `.nvmrc`, `.github/workflows/**` are
+`globalDependencies`). A `scripts/` change reruns every `lint` and `test`, and a
+`team-apps/` change reruns every `lint`. A change to one package's files,
+including its `test-baseline.json`, reruns that package and its dependents.
+README-only changes rerun nothing.
+
+**Nightly safety net.** `.github/workflows/nightly-full.yml` runs at 03:00 UTC
+(and on manual `workflow_dispatch`) on `main`:
+`pnpm turbo run lint typecheck test build --force` with no cache, then the
+baseline guard. It catches anything a cache hit could hide, such as an input
+missing from `turbo.json`.
 
 Coverage is not collected in CI; `pnpm vitest run --coverage` reports it for
 `packages/*/src/**/*.ts` locally.
@@ -221,7 +243,8 @@ the `packages/*` baselines, the checker and `.github/removed-workspaces.json`
 (removing a workspace's baseline needs security review).
 
 The guard's own logic is unit-tested in `scripts/tests/`, which runs as the
-`scripts` Vitest project with its own `scripts/test-baseline.json`.
+`scripts` Vitest project (`//#test:scripts`, or `pnpm test:scripts`) with its
+own `scripts/test-baseline.json`.
 
 ## 5. What's explicitly out of scope for this POC
 
